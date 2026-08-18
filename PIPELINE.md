@@ -14,7 +14,7 @@
 | 0 | Recon | opencode | autonomous | scaffolding report | report reviewed | ✅ |
 | 1 | Governance (bedrock init) | opencode | autonomous | AGENTS.md, rules, workflows committed | committed | ✅ (done pre-pipeline, verified) |
 | 2 | Devising | agy + Chris | interactive | design sketch + bones in tree | Chris signs off | ✅ v2 signed off 2026-08-18 |
-| 3 | Design capture (impeccable init/document) | opencode | autonomous | PRODUCT.md + DESIGN.md committed | design truth committed | ⏳ |
+| 3 | Design capture (impeccable init/document) | opencode | autonomous | PRODUCT.md + DESIGN.md committed | design truth committed | ✅ f91b84d 2026-08-18 |
 | 4 | Build | opencode | autonomous | bones validated, weirdness fixed, hard bits done | diff vs sketch | ⬜ |
 | 5 | Drudge | zero | autonomous | boilerplate, coverage, docs, obvious fills | diff reviewed | ⬜ |
 | 6 | Design review (impeccable critique/audit + Open Design run) | Hermes + OD MCP | autonomous + interactive | numbered fix list, prioritised | fixes triaged with Chris | ⬜ |
@@ -42,10 +42,11 @@
   substitute your own write_file for a run's deliverable.
 
 ## Current phase
-**3 — Design capture** (opencode, autonomous)
+**4 — Build** (opencode, autonomous)
 
 ## Handoff log
 - **Phase 0 (opencode):** Recon complete — RECON.md written, TASK.md status updated. Verified by Hermes: all 5 acceptance criteria met; spot-checks confirmed (Cargo.lock untracked, rusqlite absent, no test script). Ledger: verified.
 - **Phase 1 (bedrock):** Done pre-pipeline in root commit c8f9cad (AGENTS.md + .agents/ committed). Verified by recon.
 - **Phase 2 (agy + Chris):** First-pass sketch produced; Chris amendments applied (accent borders, custom types + colour uniqueness, window presence modes, smaller text, clipboard ops, ghost cards approved) → DESIGN-SKETCH.md v2 signed off 2026-08-18.
-- **Phase 3 (opencode):** In progress — capturing design truth from signed-off sketch.
+- **Phase 3 (opencode):** Two failed dispatch attempts (sandbox external read → symlink fix; detector /tmp write → host-side verify), then completed by Hermes host-side: PRODUCT.md + DESIGN.md + .impeccable/ committed f91b84d. Impeccable CLI installed project-level (`npx impeccable install` — wires .agents/skills, .opencode, .codex hooks; tooling gitignored). Ledger: verified.
+  - **Lesson (Q22):** impeccable tooling must be installed per-worktree via `npx impeccable install` (detects harnesses, vendors skill into project). Skill-script fallback (symlink) works but its detector runs DEGRADED (no htmlparser2/css-select). Full-strength detector = `npx impeccable detect`.
