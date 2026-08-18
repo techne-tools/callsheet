@@ -708,6 +708,9 @@ export default function App() {
 
           {!error && cards.length === 0 && (
             <div className="empty-day">
+              <div className="empty-day__mark" aria-hidden="true">
+                ◌
+              </div>
               A quiet day. No cards yet.
               <div className="empty-day__hint">
                 Add a card with the + button, or Cmd+V to paste · Tab to move

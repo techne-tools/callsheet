@@ -10,9 +10,12 @@ interface DayNavProps {
   onSetPresence: (mode: "normal" | "statusbar" | "dock") => void;
 }
 
-function formatDate(d: Date): string {
+function formatWeekday(d: Date): string {
+  return d.toLocaleDateString(undefined, { weekday: "long" });
+}
+
+function formatDaynum(d: Date): string {
   return d.toLocaleDateString(undefined, {
-    weekday: "long",
     month: "long",
     day: "numeric",
     year: "numeric",
@@ -32,96 +35,103 @@ export default function DayNav({
 
   return (
     <header className="day-header">
-      <button
-        type="button"
-        className="day-header__nav"
-        onClick={onPrev}
-        aria-label="Previous day"
-        title="Previous day (Cmd+Left)"
-      >
-        ‹
-      </button>
-      <div className="day-header__date">{formatDate(date)}</div>
-      <button
-        type="button"
-        className="day-header__nav"
-        onClick={onNext}
-        aria-label="Next day"
-        title="Next day (Cmd+Right)"
-      >
-        ›
-      </button>
-      <button
-        type="button"
-        className="day-header__today"
-        onClick={onToday}
-        title="Today (Cmd+T)"
-      >
-        Today
-      </button>
-      <button
-        type="button"
-        className="day-header__add"
-        onClick={onAdd}
-        aria-label="Add card"
-        title="Add card"
-      >
-        +
-      </button>
-      <button
-        type="button"
-        className="day-header__add day-header__add--ghost"
-        onClick={onPropose}
-        aria-label="Propose a ghost card"
-        title="Propose a ghost card"
-      >
-        ◌
-      </button>
-      <div className="day-header__presence">
+      <div className="day-header__nav-group">
+        <button
+          type="button"
+          className="day-header__nav"
+          onClick={onPrev}
+          aria-label="Previous day"
+          title="Previous day (Cmd+Left)"
+        >
+          ‹
+        </button>
+        <button
+          type="button"
+          className="day-header__nav"
+          onClick={onNext}
+          aria-label="Next day"
+          title="Next day (Cmd+Right)"
+        >
+          ›
+        </button>
+      </div>
+      <div className="day-header__date">
+        <span className="day-header__weekday">{formatWeekday(date)}</span>
+        <span className="day-header__daynum">{formatDaynum(date)}</span>
+      </div>
+      <div className="day-header__tools">
+        <button
+          type="button"
+          className="day-header__today"
+          onClick={onToday}
+          title="Today (Cmd+T)"
+        >
+          Today
+        </button>
         <button
           type="button"
           className="day-header__add"
-          onClick={() => setPresenceOpen((v) => !v)}
-          aria-label="Window presence"
-          aria-expanded={presenceOpen}
-          title="Window presence"
+          onClick={onAdd}
+          aria-label="Add card"
+          title="Add card"
         >
-          ⋯
+          +
         </button>
-        {presenceOpen && (
-          <div className="presence-menu" role="menu">
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                onSetPresence("normal");
-                setPresenceOpen(false);
-              }}
-            >
-              Normal window
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                onSetPresence("statusbar");
-                setPresenceOpen(false);
-              }}
-            >
-              Hide to menu bar
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                onSetPresence("dock");
-                setPresenceOpen(false);
-              }}
-            >
-              Toggle dock
-            </button>
-          </div>
-        )}
+        <button
+          type="button"
+          className="day-header__add day-header__add--ghost"
+          onClick={onPropose}
+          aria-label="Propose a ghost card"
+          title="Propose a ghost card"
+        >
+          ◌
+        </button>
+        <div className="day-header__presence">
+          <button
+            type="button"
+            className="day-header__add"
+            onClick={() => setPresenceOpen((v) => !v)}
+            aria-label="Window presence"
+            aria-expanded={presenceOpen}
+            title="Window presence"
+          >
+            ⋯
+          </button>
+          {presenceOpen && (
+            <div className="presence-menu" role="menu">
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  onSetPresence("normal");
+                  setPresenceOpen(false);
+                }}
+              >
+                Normal window
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  onSetPresence("statusbar");
+                  setPresenceOpen(false);
+                }}
+              >
+                Hide to menu bar
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  onSetPresence("dock");
+                  setPresenceOpen(false);
+                }}
+              >
+                Toggle dock
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   );
