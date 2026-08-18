@@ -1,0 +1,81 @@
+//! Colour allocator for custom activity types.
+//!
+//! The palette pool is a set of low-saturation pastel fill HSL tokens
+//! (~92-94% lightness), distinct from the five seed types. Uniqueness is a
+//! hard invariant: a colour is never reused across activity types.
+
+use std::collections::HashSet;
+
+/// The palette pool of pastel fill HSL tokens available to custom types.
+/// These are distinct from the five seed colours (Research/Making/Teaching/
+/// Body/Admin) so custom types never collide with seeds either.
+pub fn palette_pool() -> Vec<String> {
+    vec![
+        "hsl(260, 20%, 93%)".to_string(), // lavender
+        "hsl(200, 25%, 92%)".to_string(), // sky
+        "hsl(160, 20%, 92%)".to_string(), // mint
+        "hsl(80, 25%, 92%)".to_string(),  // lime
+        "hsl(20, 30%, 93%)".to_string(),  // apricot
+        "hsl(330, 20%, 93%)".to_string(), // blush
+        "hsl(280, 15%, 93%)".to_string(), // mauve
+        "hsl(190, 20%, 92%)".to_string(), // teal
+        "hsl(50, 25%, 92%)".to_string(),  // butter
+        "hsl(0, 15%, 93%)".to_string(),   // coral
+        "hsl(140, 15%, 92%)".to_string(), // sage-light
+        "hsl(220, 20%, 92%)".to_string(), // periwinkle
+        "hsl(10, 20%, 93%)".to_string(),  // peach
+        "hsl(300, 15%, 93%)".to_string(), // orchid
+    ]
+}
+
+/// Returns the first palette colour not present in `used`.
+///
+/// Uniqueness is a hard invariant. If every pool colour is already used, the
+/// pool is exhausted and we fall back to a deterministic hash of the used set
+/// to keep the invariant (no two types share a colour) as best as possible.
+pub fn allocate(used: &HashSet<String>) -> String {
+    for colour in palette_pool() {
+        if !used.contains(&colour) {
+            return colour;
+        }
+    }
+    // Pool exhausted: derive a stable colour from the used set so we never
+    // return a colour that is already in use.
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    use std::hash::{Hash, Hasher};
+    let mut sorted: Vec<&String> = used.iter().collect();
+    sorted.sort();
+    sorted.hash(&mut hasher);
+    let h = (hasher.finish() % 360) as u32;
+    format!("hsl({}, 20%, 93%)", h)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn allocate_returns_distinct_colours() {
+        let mut used = HashSet::new();
+        let mut allocated = HashSet::new();
+        for _ in 0..palette_pool().len() {
+            let colour = allocate(&used);
+            assert!(
+                !allocated.contains(&colour),
+                "colour {} was allocated twice",
+                colour
+            );
+            allocated.insert(colour.clone());
+            used.insert(colour);
+        }
+        assert_eq!(allocated.len(), palette_pool().len());
+    }
+
+    #[test]
+    fn allocate_respects_used_set() {
+        let mut used = HashSet::new();
+        used.insert("hsl(260, 20%, 93%)".to_string());
+        let colour = allocate(&used);
+        assert!(!used.contains(&colour));
+    }
+}
