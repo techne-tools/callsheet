@@ -32,3 +32,15 @@ dist-ssr
 .agents/skills/
 .codex/
 .opencode/
+
+# Design & process docs — filled-in process templates with personal details.
+# Kept local only; the public repo carries README/CHANGELOG/AGENTS instead.
+DESIGN*.md
+DEVISING.md
+PIPELINE.md
+PLAN-*.md
+PRODUCT.md
+RECON.md
+TASK.md
+CONTRACT.md
+.impeccable/
