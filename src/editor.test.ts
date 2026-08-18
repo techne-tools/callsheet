@@ -146,12 +146,50 @@ describe("exitList / exitQuote", () => {
     expect(uls[0].children.length).toBe(2);
   });
 
+  it("exiting a middle item keeps the items before it", () => {
+    // Regression: exitList used to drop every item before the exiting one.
+    const el = root("<ul><li>one</li><li>two</li><li>three</li></ul>");
+    const lis = el.querySelectorAll("li");
+    const p = exitList(lis[1] as HTMLLIElement);
+    expect(p.textContent).toBe("two");
+    const uls = el.querySelectorAll("ul");
+    expect(uls.length).toBe(2);
+    expect(uls[0].children.length).toBe(1);
+    expect(uls[0].textContent).toBe("one");
+    expect(uls[1].children.length).toBe(1);
+    expect(uls[1].textContent).toBe("three");
+  });
+
+  it("exiting the last item keeps the items before it", () => {
+    const el = root("<ul><li>one</li><li>two</li></ul>");
+    const lis = el.querySelectorAll("li");
+    const p = exitList(lis[1] as HTMLLIElement);
+    expect(p.textContent).toBe("two");
+    const uls = el.querySelectorAll("ul");
+    expect(uls.length).toBe(1);
+    expect(uls[0].children.length).toBe(1);
+    expect(uls[0].textContent).toBe("one");
+  });
+
   it("replaces a single-line blockquote with a paragraph", () => {
     const el = root("<blockquote><p>quote</p></blockquote>");
     const p = el.querySelector("p") as HTMLParagraphElement;
     const newP = exitQuote(p);
     expect(newP.tagName).toBe("P");
     expect(el.querySelector("blockquote")).toBeNull();
+  });
+
+  it("exiting a middle quote line keeps the lines before it", () => {
+    const el = root("<blockquote><p>one</p><p>two</p><p>three</p></blockquote>");
+    const ps = el.querySelectorAll("p");
+    const newP = exitQuote(ps[1] as HTMLParagraphElement);
+    expect(newP.textContent).toBe("two");
+    const bqs = el.querySelectorAll("blockquote");
+    expect(bqs.length).toBe(2);
+    expect(bqs[0].children.length).toBe(1);
+    expect(bqs[0].textContent).toBe("one");
+    expect(bqs[1].children.length).toBe(1);
+    expect(bqs[1].textContent).toBe("three");
   });
 });
 

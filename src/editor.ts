@@ -289,8 +289,18 @@ export function exitList(li: HTMLLIElement): HTMLElement {
   p.innerHTML = li.innerHTML;
   const siblings = Array.from(ul.children);
   const idx = siblings.indexOf(li);
+  const beforeLis = siblings.slice(0, idx);
   const afterLis = siblings.slice(idx + 1);
-  if (afterLis.length > 0) {
+  li.remove(); // detach the exiting item; the <ul> keeps the before items
+  if (beforeLis.length > 0) {
+    if (afterLis.length > 0) {
+      const newUl = doc.createElement("ul");
+      for (const l of afterLis) newUl.appendChild(l);
+      ul.after(p, newUl);
+    } else {
+      ul.after(p);
+    }
+  } else if (afterLis.length > 0) {
     const newUl = doc.createElement("ul");
     for (const l of afterLis) newUl.appendChild(l);
     ul.replaceWith(p, newUl);
@@ -308,8 +318,18 @@ export function exitQuote(p: HTMLParagraphElement): HTMLElement {
   newP.innerHTML = p.innerHTML;
   const siblings = Array.from(bq.children);
   const idx = siblings.indexOf(p);
+  const beforePs = siblings.slice(0, idx);
   const afterPs = siblings.slice(idx + 1);
-  if (afterPs.length > 0) {
+  p.remove(); // detach the exiting line; the <blockquote> keeps the before lines
+  if (beforePs.length > 0) {
+    if (afterPs.length > 0) {
+      const newBq = doc.createElement("blockquote");
+      for (const q of afterPs) newBq.appendChild(q);
+      bq.after(newP, newBq);
+    } else {
+      bq.after(newP);
+    }
+  } else if (afterPs.length > 0) {
     const newBq = doc.createElement("blockquote");
     for (const q of afterPs) newBq.appendChild(q);
     bq.replaceWith(newP, newBq);
