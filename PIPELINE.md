@@ -15,7 +15,7 @@
 | 1 | Governance (bedrock init) | opencode | autonomous | AGENTS.md, rules, workflows committed | committed | ✅ (done pre-pipeline, verified) |
 | 2 | Devising | agy + Chris | interactive | design sketch + bones in tree | Chris signs off | ✅ v2 signed off 2026-08-18 |
 | 3 | Design capture (impeccable init/document) | opencode | autonomous | PRODUCT.md + DESIGN.md committed | design truth committed | ✅ f91b84d 2026-08-18 |
-| 4 | Build | opencode | autonomous | bones validated, weirdness fixed, hard bits done | diff vs sketch | ⬜ |
+| 4 | Build | opencode | autonomous | bones validated, weirdness fixed, hard bits done | diff vs sketch | ✅ e798c11+98937d0+e859348 2026-08-18 |
 | 5 | Drudge | zero | autonomous | boilerplate, coverage, docs, obvious fills | diff reviewed | ⬜ |
 | 6 | Design review (impeccable critique/audit + Open Design run) | Hermes + OD MCP | autonomous + interactive | numbered fix list, prioritised | fixes triaged with Chris | ⬜ |
 | 7 | Fix pass (impeccable polish / compliance sweep) | opencode | autonomous | fixes applied, detector re-run clean | diff vs fix list | ⬜ |
@@ -42,7 +42,7 @@
   substitute your own write_file for a run's deliverable.
 
 ## Current phase
-**4 — Build** (opencode, autonomous)
+**5 — Drudge** (zero, autonomous)
 
 ## Handoff log
 - **Phase 0 (opencode):** Recon complete — RECON.md written, TASK.md status updated. Verified by Hermes: all 5 acceptance criteria met; spot-checks confirmed (Cargo.lock untracked, rusqlite absent, no test script). Ledger: verified.
@@ -51,3 +51,4 @@
 - **Phase 3 (opencode):** Two failed dispatch attempts (sandbox external read → symlink fix; detector /tmp write → host-side verify), then completed by Hermes host-side: PRODUCT.md + DESIGN.md + .impeccable/ committed f91b84d. Impeccable CLI installed project-level (`npx impeccable install` — wires .agents/skills, .opencode, .codex hooks; tooling gitignored). Ledger: verified.
   - **Lesson (Q22):** impeccable tooling must be installed per-worktree via `npx impeccable install` (detects harnesses, vendors skill into project). Skill-script fallback (symlink) works but its detector runs DEGRADED (no htmlparser2/css-select). Full-strength detector = `npx impeccable detect`.
 - **Phase 4 (opencode):** Build complete. Two parallel lanes (frontend @designer, backend @fixer) against a shared `CONTRACT.md`. Frontend: greet demo replaced with the day board (cards, sidebar, ghost cards, keyboard+clipboard grammar, day nav, markdown, Vitest). Backend: rusqlite + SQLite store, colour allocator (uniqueness invariant), 12 Tauri commands, window presence modes, cargo tests. Verified: `npm run build` PASS, `npm test` PASS (12), `cargo check`+`cargo test` PASS (5). Detector clean except 1 documented advisory (sidebar width transition). DESIGN.md updated with implementation resolutions. Ledger: reported (exit 0, unverified).
+  - **Hermes verification (2026-08-18):** All 10 ACs met. Live launch confirmed — `tauri dev` compiled + ran `target/debug/callsheet` (pid 89511, ASN registered in lsappinfo), killed cleanly. SQLite parameterised-only (no format! in SQL), seed HSL tokens exact, allocator uniqueness test passes, greet demo fully removed (no greet/#396cd8 in src/). Detector re-run host-side: 1 advisory only, documented. Ledger: verified.
