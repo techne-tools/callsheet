@@ -93,6 +93,7 @@ export default function Card({
             spellCheck={false}
           />
         ) : (
+          // Safe: renderMarkdown escapes HTML first (see src/markdown.ts; test-proven).
           <div
             dangerouslySetInnerHTML={{ __html: renderMarkdown(card.markdown) }}
             onKeyDown={(e) => {

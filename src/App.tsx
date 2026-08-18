@@ -29,6 +29,20 @@ function addDays(d: Date, n: number): Date {
   return next;
 }
 
+function calmError(e: unknown, context: string): string {
+  console.error(`[callsheet] ${context} failed:`, e);
+  switch (context) {
+    case "save":
+      return "Couldn't save this card. It's still here — try again.";
+    case "delete":
+      return "Couldn't delete that card. Try again.";
+    case "load":
+      return "Couldn't load this day. Try again.";
+    default:
+      return "Something went wrong. Try again.";
+  }
+}
+
 export default function App() {
   const [date, setDate] = useState<Date>(() => new Date());
   const [cards, setCards] = useState<Card[]>([]);
@@ -38,6 +52,7 @@ export default function App() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastDeleted, setLastDeleted] = useState<Card | null>(null);
 
   const dateKey = toISODate(date);
   const dayPaneRef = useRef<HTMLDivElement>(null);
@@ -54,7 +69,7 @@ export default function App() {
         setActivityTypes(types);
         setTemplates(tpls);
       } catch (e) {
-        setError(String(e));
+        setError(calmError(e, "load"));
       }
     })();
   }, []);
@@ -67,7 +82,7 @@ export default function App() {
       setSelectedId(null);
       setEditingId(null);
     } catch (e) {
-      setError(String(e));
+      setError(calmError(e, "load"));
     }
   }, []);
 
@@ -144,7 +159,7 @@ export default function App() {
         });
         setCards((prev) => prev.map((c) => (c.id === saved.id ? saved : c)));
       } catch (e) {
-        setError(String(e));
+        setError(calmError(e, "save"));
       }
     },
     [],
@@ -154,10 +169,11 @@ export default function App() {
     async (card: Card) => {
       try {
         await deleteCard(card.id);
+        setLastDeleted(card);
         setCards((prev) => prev.filter((c) => c.id !== card.id));
         if (selectedId === card.id) setSelectedId(null);
       } catch (e) {
-        setError(String(e));
+        setError(calmError(e, "delete"));
       }
     },
     [selectedId],
@@ -171,7 +187,7 @@ export default function App() {
           prev.map((c) => (c.id === committed.id ? committed : c)),
         );
       } catch (e) {
-        setError(String(e));
+        setError(calmError(e, "save"));
       }
     },
     [],
@@ -218,7 +234,7 @@ export default function App() {
       });
       await loadCards(dateKey);
     } catch (e) {
-      setError(String(e));
+      setError(calmError(e, "save"));
     }
   }, [cards, selectedId, activityTypes, dateKey, loadCards]);
 
@@ -237,6 +253,29 @@ export default function App() {
       if (mod && e.key === "ArrowRight") {
         e.preventDefault();
         setDate((d) => addDays(d, 1));
+        return;
+      }
+
+      // Undo delete: Cmd+Z restores the last deleted card
+      if (mod && (e.key === "z" || e.key === "Z")) {
+        if (lastDeleted == null) return;
+        e.preventDefault();
+        void (async () => {
+          try {
+            await saveCard({
+              id: 0,
+              date: lastDeleted.date,
+              activityTypeId: lastDeleted.activityTypeId,
+              position: lastDeleted.position,
+              markdown: lastDeleted.markdown,
+              isGhost: lastDeleted.isGhost,
+            });
+            setLastDeleted(null);
+            await loadCards(dateKey);
+          } catch (err) {
+            setError(calmError(err, "save"));
+          }
+        })();
         return;
       }
 
@@ -300,6 +339,9 @@ export default function App() {
       moveSelected,
       selectedId,
       editingId,
+      lastDeleted,
+      loadCards,
+      dateKey,
     ],
   );
 
@@ -343,7 +385,7 @@ export default function App() {
             });
             await loadCards(dateKey);
           } catch (err) {
-            setError(String(err));
+            setError(calmError(err, "save"));
           }
         }
         return;
@@ -403,8 +445,6 @@ export default function App() {
       >
         <DayNav
           date={date}
-          canGoPrev
-          canGoNext
           onPrev={() => setDate((d) => addDays(d, -1))}
           onNext={() => setDate((d) => addDays(d, 1))}
         />
@@ -417,7 +457,12 @@ export default function App() {
           )}
 
           {!error && cards.length === 0 && (
-            <div className="empty-day">A quiet day. No cards yet.</div>
+            <div className="empty-day">
+              A quiet day. No cards yet.
+              <div className="empty-day__hint">
+                Tab to move between cards · Cmd+Shift+↑↓ to reorder
+              </div>
+            </div>
           )}
 
           {!error && cards.length > 0 && (

@@ -26,7 +26,6 @@
   /* Quiet chrome */
   --scrollbar-thumb: hsl(0, 0%, 80%);
   --scrollbar-thumb-hover: hsl(0, 0%, 70%);
-  --nav-disabled: hsl(0, 0%, 78%);
   --blockquote-border: hsl(0, 0%, 70%);
   --hover-border: hsl(0, 0%, 75%);
   --rail-hover: hsl(0, 0%, 94%);
@@ -157,10 +156,6 @@ body {
 .day-header__nav:hover {
   color: var(--ink);
 }
-.day-header__nav:disabled {
-  color: var(--nav-disabled);
-  cursor: default;
-}
 
 /* ---------------------------------------------------------------------------
    Card column
@@ -189,6 +184,13 @@ body {
   text-align: center;
   padding: 48px 0;
   font-size: 13px;
+}
+
+.empty-day__hint {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--ink-secondary);
+  opacity: 0.7;
 }
 
 /* ---------------------------------------------------------------------------
