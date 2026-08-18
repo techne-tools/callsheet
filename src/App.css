@@ -797,6 +797,9 @@ body {
 .template--dragging {
   opacity: 0.4;
 }
+.template--editing {
+  background: var(--surface);
+}
 .template__name {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -972,17 +975,21 @@ body {
    ------------------------------------------------------------------------- */
 
 .sidebar-rail {
-  width: 12px;
+  width: 16px;
   flex: none;
   border-right: 1px solid var(--hairline);
   background: var(--paper);
-  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
+  cursor: pointer;
   color: var(--ink-secondary);
-  font-size: 10px;
   transition: background 120ms var(--ease-out), color 120ms var(--ease-out);
+}
+.sidebar-rail__chevron {
+  font-size: 14px;
+  line-height: 1;
+  user-select: none;
 }
 .sidebar-rail:hover {
   background: var(--rail-hover);

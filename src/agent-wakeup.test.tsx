@@ -109,4 +109,26 @@ describe("agent wake-up (Phase B)", () => {
 
     expect(mocks.unlisten).toHaveBeenCalled();
   });
+
+  it("renders a ghost card once — as a proposal, not a real card", async () => {
+    mocks.listCards.mockResolvedValue([
+      {
+        id: 7,
+        date: "2026-08-18",
+        activityTypeId: 1,
+        position: 0,
+        markdown: "A quiet suggestion.",
+        isGhost: true,
+        source: "agent",
+      },
+    ]);
+    const root = renderApp();
+    await act(async () => {});
+
+    // The ghost must appear exactly once, as a GhostCard (dashed proposal),
+    // never as a real CardView duplicate.
+    expect(document.querySelectorAll(".ghost-card").length).toBe(1);
+    expect(document.querySelectorAll(".card").length).toBe(0);
+    act(() => root.unmount());
+  });
 });

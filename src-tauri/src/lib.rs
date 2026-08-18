@@ -9,6 +9,8 @@ mod db;
 use std::sync::Mutex;
 
 use rusqlite::Connection;
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{Emitter, Manager};
 
 use db::{ActivityType, Card, CardInput, Template};
@@ -38,6 +40,17 @@ impl Store {
 /// Tracks whether the dock is currently visible (macOS). There is no getter
 /// for the current activation policy, so we track it ourselves.
 struct DockVisible(Mutex<bool>);
+
+/// Show and focus the main window (used by tray click and macOS Reopen).
+fn show_main_window(app: &tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("main") {
+        window.set_always_on_top(false).map_err(|e| e.to_string())?;
+        window.unminimize().map_err(|e| e.to_string())?;
+        window.show().map_err(|e| e.to_string())?;
+        window.set_focus().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
 
 // ---------------------------------------------------------------------------
 // Cards
@@ -195,11 +208,7 @@ fn set_window_presence(
 ) -> Result<(), String> {
     match mode.as_str() {
         "normal" => {
-            if let Some(window) = app.get_webview_window("main") {
-                window.set_always_on_top(false).map_err(|e| e.to_string())?;
-                window.unminimize().map_err(|e| e.to_string())?;
-                window.show().map_err(|e| e.to_string())?;
-            }
+            show_main_window(&app)?;
             Ok(())
         }
         "statusbar" => {
@@ -249,6 +258,38 @@ pub fn run() {
                 path: db_path,
             });
             app.manage(DockVisible(Mutex::new(true)));
+
+            // Menu-bar tray icon: the way back from "statusbar" mode.
+            // Left-click shows the window; the menu offers Show / Quit.
+            let show = MenuItem::with_id(app, "show", "Show Callsheet", true, None::<&str>)?;
+            let quit = MenuItem::with_id(app, "quit", "Quit Callsheet", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&show, &quit])?;
+            let _tray = TrayIconBuilder::with_id("callsheet-tray")
+                .icon(app.default_window_icon().unwrap().clone())
+                .menu(&menu)
+                .show_menu_on_left_click(false)
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "show" => {
+                        let _ = show_main_window(app);
+                    }
+                    "quit" => {
+                        app.exit(0);
+                    }
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        let app = tray.app_handle();
+                        let _ = show_main_window(app);
+                    }
+                })
+                .build(app)?;
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -267,6 +308,12 @@ pub fn run() {
             update_template,
             set_window_presence,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { .. } = event {
+                let _ = show_main_window(app_handle);
+            }
+        });
 }

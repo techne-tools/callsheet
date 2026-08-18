@@ -58,7 +58,9 @@ export default function Sidebar({
   if (collapsed) {
     return (
       <div className="sidebar-rail" onClick={onToggle} title="Open templates">
-        ›
+        <span className="sidebar-rail__chevron" aria-hidden="true">
+          ›
+        </span>
       </div>
     );
   }
@@ -148,6 +150,7 @@ export default function Sidebar({
               <div
                 key={t.id}
                 className="template"
+                style={{ background: colourFor(t.activityTypeId) }}
                 onMouseDown={(e) => onTemplateDragStart(e, t)}
                 onDoubleClick={() => startEdit(t)}
                 title={`${t.name} — drag to add, double-click to edit`}

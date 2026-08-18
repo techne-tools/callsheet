@@ -244,7 +244,7 @@ export default function App() {
         id: 0,
         date: dateKey,
         activityTypeId: typeId,
-        position: cards.length,
+        position: cards.filter((c) => !c.isGhost).length,
         markdown: "",
         isGhost: false,
       });
@@ -419,7 +419,7 @@ export default function App() {
         id: 0,
         date: dateKey,
         activityTypeId: typeId,
-        position: cards.length,
+        position: cards.filter((c) => !c.isGhost).length,
         markdown: text,
         isGhost: false,
       });
@@ -654,7 +654,7 @@ export default function App() {
                   id: 0,
                   date: dateKeyRef.current,
                   activityTypeId: tpl.activityTypeId,
-                  position: cardsRef.current.length,
+                  position: cardsRef.current.filter((c) => !c.isGhost).length,
                   markdown: tpl.markdown,
                   isGhost: false,
                 });
@@ -758,30 +758,32 @@ export default function App() {
 
           {!error && cards.length > 0 && (
             <div className="card-stack" role="list">
-              {cards.map((card, i) => (
-                <div key={card.id} className="card-slot">
-                  {dropIndex === i && (
-                    <div className="drop-indicator" aria-hidden="true" />
-                  )}
-                  <CardView
-                    card={card}
-                    fill={fillFor(card)}
-                    border={borderFor(card)}
-                    activityTypes={activityTypes}
-                    selected={card.id === selectedId}
-                    editing={card.id === editingId}
-                    onSelect={() => setSelectedId(card.id)}
-                    onEdit={() =>
-                      setEditingId((cur) => (cur === card.id ? null : card.id))
-                    }
-                    onSave={(md) => void saveMarkdown(card, md)}
-                    onDelete={() => void handleDelete(card)}
-                    onGrabStart={(e) => beginDrag("card", card.id, e)}
-                    onTypeChange={(typeId) => void changeCardType(card, typeId)}
-                  />
-                </div>
-              ))}
-              {dropIndex === cards.length && (
+              {cards
+                .filter((c) => !c.isGhost)
+                .map((card, i) => (
+                  <div key={card.id} className="card-slot">
+                    {dropIndex === i && (
+                      <div className="drop-indicator" aria-hidden="true" />
+                    )}
+                    <CardView
+                      card={card}
+                      fill={fillFor(card)}
+                      border={borderFor(card)}
+                      activityTypes={activityTypes}
+                      selected={card.id === selectedId}
+                      editing={card.id === editingId}
+                      onSelect={() => setSelectedId(card.id)}
+                      onEdit={() =>
+                        setEditingId((cur) => (cur === card.id ? null : card.id))
+                      }
+                      onSave={(md) => void saveMarkdown(card, md)}
+                      onDelete={() => void handleDelete(card)}
+                      onGrabStart={(e) => beginDrag("card", card.id, e)}
+                      onTypeChange={(typeId) => void changeCardType(card, typeId)}
+                    />
+                  </div>
+                ))}
+              {dropIndex === cards.filter((c) => !c.isGhost).length && (
                 <div className="drop-indicator" aria-hidden="true" />
               )}
 
