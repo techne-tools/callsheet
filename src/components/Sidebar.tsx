@@ -15,6 +15,8 @@ interface SidebarProps {
     markdown: string,
     activityTypeId: number,
   ) => void;
+  onCreateActivityType: (name: string) => void;
+  onDeleteActivityType: (id: number) => void;
 }
 
 export default function Sidebar({
@@ -26,11 +28,15 @@ export default function Sidebar({
   onDeleteTemplate,
   onAddTemplate,
   onUpdateTemplate,
+  onCreateActivityType,
+  onDeleteActivityType,
 }: SidebarProps) {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [draftName, setDraftName] = useState("");
   const [draftMarkdown, setDraftMarkdown] = useState("");
   const [draftTypeId, setDraftTypeId] = useState<number>(0);
+  const [typeDraft, setTypeDraft] = useState("");
+  const [addingType, setAddingType] = useState(false);
 
   const colourFor = (typeId: number): string =>
     activityTypes.find((t) => t.id === typeId)?.colour ?? "hsl(0, 0%, 80%)";
@@ -168,6 +174,66 @@ export default function Sidebar({
             ),
           )
         )}
+      </div>
+
+      <div className="sidebar__types">
+        <div className="sidebar__types-header">
+          <span className="sidebar__title">Activity types</span>
+          <button
+            type="button"
+            className="sidebar__add"
+            onClick={() => setAddingType((v) => !v)}
+            title="Add activity type"
+            aria-label="Add activity type"
+          >
+            +
+          </button>
+        </div>
+        {addingType && (
+          <div className="sidebar__type-add">
+            <input
+              className="template__input"
+              value={typeDraft}
+              onChange={(e) => setTypeDraft(e.target.value)}
+              placeholder="Type name"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && typeDraft.trim()) {
+                  onCreateActivityType(typeDraft.trim());
+                  setTypeDraft("");
+                  setAddingType(false);
+                }
+                if (e.key === "Escape") {
+                  setTypeDraft("");
+                  setAddingType(false);
+                }
+              }}
+            />
+          </div>
+        )}
+        <div className="sidebar__type-list">
+          {activityTypes.map((t) => (
+            <div key={t.id} className="sidebar__type">
+              <span
+                className="template__dot"
+                style={{ background: t.colour }}
+                aria-hidden="true"
+              />
+              <span className="sidebar__type-name">{t.name}</span>
+              {!t.isSeed && (
+                <button
+                  type="button"
+                  className="template__delete"
+                  onClick={() => onDeleteActivityType(t.id)}
+                  title="Delete activity type"
+                  aria-label={`Delete activity type ${t.name}`}
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
     </aside>
   );

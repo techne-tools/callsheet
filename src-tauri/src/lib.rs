@@ -43,12 +43,6 @@ fn delete_card(state: tauri::State<'_, Store>, id: i64) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn move_card(state: tauri::State<'_, Store>, id: i64, new_position: i64) -> Result<(), String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
-    db::move_card(&conn, id, new_position).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
 fn commit_ghost_card(state: tauri::State<'_, Store>, id: i64) -> Result<Card, String> {
     let conn = state.0.lock().map_err(|e| e.to_string())?;
     db::commit_ghost_card(&conn, id).map_err(|e| e.to_string())
@@ -76,7 +70,7 @@ fn create_activity_type(
 #[tauri::command]
 fn delete_activity_type(state: tauri::State<'_, Store>, id: i64) -> Result<(), String> {
     let conn = state.0.lock().map_err(|e| e.to_string())?;
-    db::delete_activity_type(&conn, id).map_err(|e| e.to_string())
+    db::delete_activity_type(&conn, id)
 }
 
 // ---------------------------------------------------------------------------
@@ -192,7 +186,6 @@ pub fn run() {
             list_cards,
             save_card,
             delete_card,
-            move_card,
             commit_ghost_card,
             list_activity_types,
             create_activity_type,

@@ -52,13 +52,6 @@ export function deriveBorder(fill: string, lightness = 70): string {
   return `hsl(${m[1]}, ${m[2]}%, ${lightness}%)`;
 }
 
-/** Secondary text tinted from the same hue (for quiet text on pastel fills). */
-export function deriveTextSecondary(fill: string): string {
-  const m = HSL_RE.exec(fill);
-  if (!m) return "hsl(0, 0%, 40%)";
-  return `hsl(${m[1]}, ${m[2]}%, 40%)`;
-}
-
 // ---------------------------------------------------------------------------
 // Cards
 // ---------------------------------------------------------------------------
@@ -71,9 +64,6 @@ export const saveCard = (card: CardInput): Promise<Card> =>
 
 export const deleteCard = (id: number): Promise<void> =>
   invoke<void>("delete_card", { id });
-
-export const moveCard = (id: number, newPosition: number): Promise<void> =>
-  invoke<void>("move_card", { id, newPosition });
 
 export const commitGhostCard = (id: number): Promise<Card> =>
   invoke<Card>("commit_ghost_card", { id });

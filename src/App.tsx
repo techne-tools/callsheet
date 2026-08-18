@@ -6,10 +6,13 @@ import {
   deleteCard,
   commitGhostCard,
   listActivityTypes,
+  createActivityType,
+  deleteActivityType,
   listTemplates,
   createTemplate,
   deleteTemplate,
   updateTemplate,
+  setWindowPresence,
   deriveBorder,
 } from "./tauri";
 import { markdownToPlainText, templateNameFromMarkdown } from "./markdown";
@@ -269,6 +272,83 @@ export default function App() {
     }
   }, [activityTypes]);
 
+  // --- Activity type management -------------------------------------------
+
+  const addActivityType = useCallback(async (name: string) => {
+    try {
+      const t = await createActivityType(name);
+      setActivityTypes((prev) => [...prev, t]);
+    } catch (e) {
+      setError(calmError(e, "save"));
+    }
+  }, []);
+
+  const removeActivityType = useCallback(async (id: number) => {
+    try {
+      await deleteActivityType(id);
+      setActivityTypes((prev) => prev.filter((t) => t.id !== id));
+    } catch (e) {
+      setError(calmError(e, "delete"));
+    }
+  }, []);
+
+  // --- Window presence -----------------------------------------------------
+
+  const setPresence = useCallback(
+    async (mode: "normal" | "statusbar" | "dock") => {
+      try {
+        await setWindowPresence(mode);
+      } catch (e) {
+        setError(calmError(e, "load"));
+      }
+    },
+    [],
+  );
+
+  // --- Ghost proposal (agent layer placeholder) ----------------------------
+  // The agent (Hermes/Noema) will propose cards by writing isGhost rows. Until
+  // that layer is wired, this manual affordance creates a demonstrable ghost
+  // card so the presence is visible and testable.
+
+  const proposeGhost = useCallback(async () => {
+    const typeId = activityTypes[0]?.id;
+    if (typeId == null) return;
+    try {
+      await saveCard({
+        id: 0,
+        date: dateKey,
+        activityTypeId: typeId,
+        position: cards.length,
+        markdown: "A quiet suggestion for this day.",
+        isGhost: true,
+      });
+      await loadCards(dateKey);
+    } catch (e) {
+      setError(calmError(e, "save"));
+    }
+  }, [activityTypes, dateKey, cards.length, loadCards]);
+
+  // --- Card type re-shade --------------------------------------------------
+
+  const changeCardType = useCallback(
+    async (card: Card, typeId: number) => {
+      try {
+        const saved = await saveCard({
+          id: card.id,
+          date: card.date,
+          activityTypeId: typeId,
+          position: card.position,
+          markdown: card.markdown,
+          isGhost: card.isGhost,
+        });
+        setCards((prev) => prev.map((c) => (c.id === saved.id ? saved : c)));
+      } catch (e) {
+        setError(calmError(e, "save"));
+      }
+    },
+    [],
+  );
+
   // --- Clipboard -----------------------------------------------------------
 
   const copySelected = useCallback(async () => {
@@ -334,6 +414,13 @@ export default function App() {
       if (mod && e.key === "ArrowRight") {
         e.preventDefault();
         setDate((d) => addDays(d, 1));
+        return;
+      }
+
+      // Today: Cmd+T jumps back to the current day
+      if (mod && (e.key === "t" || e.key === "T")) {
+        e.preventDefault();
+        setDate(new Date());
         return;
       }
 
@@ -454,6 +541,7 @@ export default function App() {
   } | null>(null);
   const [dragPos, setDragPos] = useState<{ x: number; y: number } | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
+  const [dayOver, setDayOver] = useState(false);
 
   const DRAG_THRESHOLD = 4; // px of movement before a drag begins
 
@@ -504,12 +592,15 @@ export default function App() {
       if (d.kind === "card") {
         setDropIndex(computeDropIndexAt(e.clientY));
       }
+      const under = document.elementFromPoint(e.clientX, e.clientY);
+      setDayOver(!!under?.closest(".day-pane"));
     };
     const onUp = (e: MouseEvent) => {
       const d = dragRef.current;
       dragRef.current = null;
       setDragPos(null);
       setDropIndex(null);
+      setDayOver(false);
       if (!d || !d.active) return;
 
       const under = document.elementFromPoint(e.clientX, e.clientY);
@@ -588,10 +679,12 @@ export default function App() {
         onUpdateTemplate={(id, name, md, typeId) =>
           void saveTemplateEdit(id, name, md, typeId)
         }
+        onCreateActivityType={(name) => void addActivityType(name)}
+        onDeleteActivityType={(id) => void removeActivityType(id)}
       />
 
       <div
-        className="day-pane"
+        className={`day-pane${dayOver ? " day-pane--over" : ""}`}
         ref={dayPaneRef}
         onKeyDown={handleKeyDown}
         tabIndex={-1}
@@ -601,6 +694,9 @@ export default function App() {
           onPrev={() => setDate((d) => addDays(d, -1))}
           onNext={() => setDate((d) => addDays(d, 1))}
           onAdd={() => void addCard()}
+          onToday={() => setDate(new Date())}
+          onPropose={() => void proposeGhost()}
+          onSetPresence={(mode) => void setPresence(mode)}
         />
 
         <div className="card-column">
@@ -631,6 +727,7 @@ export default function App() {
                     card={card}
                     fill={fillFor(card)}
                     border={borderFor(card)}
+                    activityTypes={activityTypes}
                     selected={card.id === selectedId}
                     editing={card.id === editingId}
                     onSelect={() => setSelectedId(card.id)}
@@ -640,6 +737,7 @@ export default function App() {
                     onSave={(md) => void saveMarkdown(card, md)}
                     onDelete={() => void handleDelete(card)}
                     onGrabStart={(e) => beginDrag("card", card.id, e)}
+                    onTypeChange={(typeId) => void changeCardType(card, typeId)}
                   />
                 </div>
               ))}

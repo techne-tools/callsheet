@@ -178,6 +178,67 @@ body {
   border-color: var(--hover-border);
 }
 
+.day-header__today {
+  appearance: none;
+  border: 1px solid var(--hairline);
+  background: transparent;
+  color: var(--ink-secondary);
+  font: inherit;
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 120ms var(--ease-out), border-color 120ms var(--ease-out);
+}
+.day-header__today:hover {
+  color: var(--ink);
+  border-color: var(--hover-border);
+}
+
+/* Ghost proposal button — a quiet ring, never a ping */
+.day-header__add--ghost {
+  color: var(--ghost-label);
+  border-style: dashed;
+}
+.day-header__add--ghost:hover {
+  color: var(--ghost-hover-ink);
+  border-color: var(--ghost-hover-border);
+}
+
+/* Window presence menu (normal / statusbar / dock) */
+.day-header__presence {
+  position: relative;
+}
+.presence-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 50;
+  min-width: 150px;
+  background: var(--paper);
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px var(--ghost-border);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+}
+.presence-menu button {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.presence-menu button:hover {
+  background: var(--rail-hover);
+}
+
 /* ---------------------------------------------------------------------------
    Card column
    ------------------------------------------------------------------------- */
@@ -313,6 +374,18 @@ body {
   min-height: 1.4em;
 }
 
+/* Non-colour redundancy: a quiet type label so activity types stay
+   distinguishable without hue alone (design review item 7). */
+.card__type-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-secondary);
+  opacity: 0.75;
+  margin-bottom: 2px;
+  user-select: none;
+}
+
 /* Hover actions: save-as-template + delete (quiet until you look) */
 .card__actions {
   position: absolute;
@@ -348,9 +421,59 @@ body {
   color: var(--ink);
   border-color: var(--hover-border);
 }
+/* Destructive signal: delete turns a quiet red on hover — signals
+   destruction without shouting (design review item 8). */
 .card__action--delete:hover {
+  color: hsl(0, 60%, 40%);
+  border-color: hsl(0, 60%, 70%);
+}
+
+/* Per-card activity-type picker (design review item 5) */
+.card__type {
+  position: relative;
+}
+.card__type-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid var(--hairline);
+  flex: none;
+}
+.card__type-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 50;
+  min-width: 140px;
+  background: var(--paper);
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px var(--ghost-border);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+}
+.card__type-option {
+  appearance: none;
+  border: none;
+  background: transparent;
   color: var(--ink);
-  border-color: var(--hover-border);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  padding: 5px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.card__type-option:hover {
+  background: var(--rail-hover);
+}
+.card__type-option--active {
+  font-weight: 600;
 }
 
 /* Markdown rendering */
@@ -679,6 +802,51 @@ body {
 .template__cancel:hover {
   color: var(--ink);
   border-color: var(--hover-border);
+}
+
+/* Sidebar activity types (design review item 2) */
+.sidebar__types {
+  flex: none;
+  border-top: 1px solid var(--hairline);
+  padding: 10px 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sidebar__types-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px;
+}
+.sidebar__type-add {
+  padding: 0 2px;
+}
+.sidebar__type-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+.sidebar__type {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 4px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--ink);
+}
+.sidebar__type:hover {
+  background: var(--rail-hover);
+}
+.sidebar__type-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ---------------------------------------------------------------------------

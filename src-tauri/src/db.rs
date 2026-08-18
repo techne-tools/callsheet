@@ -178,15 +178,6 @@ pub fn delete_card(conn: &Connection, id: i64) -> Result<()> {
     Ok(())
 }
 
-/// Move a card to a new position within its day.
-pub fn move_card(conn: &Connection, id: i64, new_position: i64) -> Result<()> {
-    conn.execute(
-        "UPDATE cards SET position = ?1 WHERE id = ?2",
-        params![new_position, id],
-    )?;
-    Ok(())
-}
-
 /// Commit a ghost card (set is_ghost = 0). Returns the updated card.
 pub fn commit_ghost_card(conn: &Connection, id: i64) -> Result<Card> {
     conn.execute(
@@ -249,8 +240,35 @@ pub fn create_activity_type(conn: &Connection, name: &str) -> Result<ActivityTyp
 }
 
 /// Delete an activity type by id.
-pub fn delete_activity_type(conn: &Connection, id: i64) -> Result<()> {
-    conn.execute("DELETE FROM activity_types WHERE id = ?1", params![id])?;
+///
+/// Seed types (the five core grammar colours) cannot be deleted — they are
+/// the design contract. Types still referenced by cards or templates are
+/// refused with a clear error (the FK constraint would otherwise fail with
+/// a raw SQLite message).
+pub fn delete_activity_type(conn: &Connection, id: i64) -> Result<(), String> {
+    let is_seed: i64 = conn
+        .query_row(
+            "SELECT is_seed FROM activity_types WHERE id = ?1",
+            params![id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    if is_seed != 0 {
+        return Err("seed activity types cannot be deleted".to_string());
+    }
+    let in_use: i64 = conn
+        .query_row(
+            "SELECT (SELECT COUNT(*) FROM cards WHERE activity_type_id = ?1)
+                  + (SELECT COUNT(*) FROM templates WHERE activity_type_id = ?1)",
+            params![id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    if in_use > 0 {
+        return Err("activity type is in use by cards or templates".to_string());
+    }
+    conn.execute("DELETE FROM activity_types WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -389,10 +407,6 @@ mod tests {
         assert_eq!(updated.markdown, "## Edited");
         assert_eq!(updated.position, 1);
 
-        // Move.
-        move_card(&conn, saved.id, 5).unwrap();
-        assert_eq!(list_cards(&conn, "2026-08-18").unwrap()[0].position, 5);
-
         // Ghost commit.
         let ghost = save_card(
             &conn,
@@ -423,6 +437,42 @@ mod tests {
         assert_ne!(a.colour, b.colour);
         assert!(!a.is_seed);
         assert!(!b.is_seed);
+    }
+
+    #[test]
+    fn delete_activity_type_guards_seed_and_in_use() {
+        let conn = open_in_memory().unwrap();
+        let types = list_activity_types(&conn).unwrap();
+        let seed = types.iter().find(|t| t.is_seed).unwrap();
+
+        // Seed types cannot be deleted.
+        assert!(delete_activity_type(&conn, seed.id).is_err());
+
+        // A custom type in use by a card cannot be deleted.
+        let custom = create_activity_type(&conn, "Custom").unwrap();
+        save_card(
+            &conn,
+            &CardInput {
+                id: 0,
+                date: "2026-08-18".to_string(),
+                activity_type_id: custom.id,
+                position: 0,
+                markdown: "x".to_string(),
+                is_ghost: false,
+            },
+        )
+        .unwrap();
+        assert!(delete_activity_type(&conn, custom.id).is_err());
+
+        // An unused custom type can be deleted.
+        let free = create_activity_type(&conn, "Free").unwrap();
+        delete_activity_type(&conn, free.id).unwrap();
+        assert!(
+            list_activity_types(&conn)
+                .unwrap()
+                .iter()
+                .all(|t| t.id != free.id)
+        );
     }
 
     #[test]

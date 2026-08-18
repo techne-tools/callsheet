@@ -60,7 +60,6 @@ Cards:
 - `list_cards(date: String) -> Vec<Card>`
 - `save_card(card: CardInput) -> Card`  (upsert by id; 0 = insert)
 - `delete_card(id: i64) -> ()`
-- `move_card(id: i64, new_position: i64) -> ()`
 - `commit_ghost_card(id: i64) -> Card`  (sets is_ghost=0)
 
 Activity types:

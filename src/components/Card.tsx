@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
-import type { Card as CardType } from "../tauri";
+import { useEffect, useRef, useState } from "react";
+import type { ActivityType, Card as CardType } from "../tauri";
 import { parseInline, renderMarkdown } from "../markdown";
 import {
   applyLineTransform,
@@ -15,6 +15,7 @@ interface CardProps {
   card: CardType;
   fill: string;
   border: string;
+  activityTypes: ActivityType[];
   selected: boolean;
   editing: boolean;
   onSelect: () => void;
@@ -22,12 +23,14 @@ interface CardProps {
   onSave: (markdown: string) => void;
   onDelete: () => void;
   onGrabStart: (e: React.MouseEvent) => void;
+  onTypeChange: (typeId: number) => void;
 }
 
 export default function Card({
   card,
   fill,
   border,
+  activityTypes,
   selected,
   editing,
   onSelect,
@@ -35,9 +38,11 @@ export default function Card({
   onSave,
   onDelete,
   onGrabStart,
+  onTypeChange,
 }: CardProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const committedRef = useRef(false);
+  const [typeOpen, setTypeOpen] = useState(false);
 
   // Entering edit mode: render the markdown into the contentEditable and
   // place the caret at the end.
@@ -312,6 +317,9 @@ export default function Card({
       </div>
 
       <div className="card__body">
+        <div className="card__type-label">
+          {activityTypes.find((t) => t.id === card.activityTypeId)?.name ?? ""}
+        </div>
         {editing ? (
           <div
             ref={editorRef}
@@ -336,6 +344,53 @@ export default function Card({
       </div>
 
       <div className="card__actions">
+        <div className="card__type">
+          <button
+            type="button"
+            className="card__action card__action--type"
+            onClick={(e) => {
+              e.stopPropagation();
+              setTypeOpen((v) => !v);
+            }}
+            title="Change activity type"
+            aria-label="Change activity type"
+            aria-expanded={typeOpen}
+          >
+            <span
+              className="card__type-dot"
+              style={{ background: fill }}
+              aria-hidden="true"
+            />
+          </button>
+          {typeOpen && (
+            <div className="card__type-menu" role="menu">
+              {activityTypes.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  role="menuitem"
+                  className={
+                    t.id === card.activityTypeId
+                      ? "card__type-option card__type-option--active"
+                      : "card__type-option"
+                  }
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onTypeChange(t.id);
+                    setTypeOpen(false);
+                  }}
+                >
+                  <span
+                    className="card__type-dot"
+                    style={{ background: t.colour }}
+                    aria-hidden="true"
+                  />
+                  {t.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <button
           type="button"
           className="card__action card__action--delete"
@@ -346,7 +401,18 @@ export default function Card({
           title="Delete card (Backspace / Delete)"
           aria-label="Delete card"
         >
-          ×
+          <svg
+            width="10"
+            height="10"
+            viewBox="0 0 10 10"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+            aria-hidden="true"
+          >
+            <path d="M1.5 1.5l7 7M8.5 1.5l-7 7" />
+          </svg>
         </button>
       </div>
     </div>
