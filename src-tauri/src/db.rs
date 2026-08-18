@@ -42,7 +42,9 @@ pub fn init_schema(conn: &Connection) -> Result<()> {
             position INTEGER NOT NULL,
             markdown TEXT NOT NULL DEFAULT '',
             is_ghost INTEGER NOT NULL DEFAULT 0
-        );",
+        );
+        CREATE INDEX IF NOT EXISTS idx_cards_date ON cards(date);
+        CREATE INDEX IF NOT EXISTS idx_cards_activity ON cards(activity_type_id);",
     )
 }
 
@@ -68,6 +70,7 @@ pub fn seed_activity_types(conn: &Connection) -> Result<()> {
 /// Open (or create) the database at the given path and run schema + seed.
 pub fn open(path: &std::path::Path) -> Result<Connection> {
     let conn = Connection::open(path)?;
+    conn.pragma_update(None, "foreign_keys", true)?;
     init_schema(&conn)?;
     seed_activity_types(&conn)?;
     Ok(conn)
@@ -77,9 +80,26 @@ pub fn open(path: &std::path::Path) -> Result<Connection> {
 #[cfg(test)]
 pub fn open_in_memory() -> Result<Connection> {
     let conn = Connection::open_in_memory()?;
+    conn.pragma_update(None, "foreign_keys", true)?;
     init_schema(&conn)?;
     seed_activity_types(&conn)?;
     Ok(conn)
+}
+
+/// Validate that `date` is an ISO yyyy-mm-dd string. Returns an error message
+/// otherwise. Guards the "no cross-day bleed" invariant at the store boundary.
+pub fn validate_date(date: &str) -> Result<(), String> {
+    let is_iso = date.len() == 10
+        && date.as_bytes()[4] == b'-'
+        && date.as_bytes()[7] == b'-'
+        && date[..4].chars().all(|c| c.is_ascii_digit())
+        && date[5..7].chars().all(|c| c.is_ascii_digit())
+        && date[8..10].chars().all(|c| c.is_ascii_digit());
+    if is_iso {
+        Ok(())
+    } else {
+        Err(format!("invalid date (expected yyyy-mm-dd): {}", date))
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -148,7 +168,7 @@ pub fn save_card(conn: &Connection, input: &CardInput) -> Result<Card> {
         let id = conn.last_insert_rowid();
         return get_card(conn, id);
     }
-    conn.execute(
+    let rows_affected = conn.execute(
         "UPDATE cards SET date = ?1, activity_type_id = ?2, position = ?3,
             markdown = ?4, is_ghost = ?5 WHERE id = ?6",
         params![
@@ -160,6 +180,9 @@ pub fn save_card(conn: &Connection, input: &CardInput) -> Result<Card> {
             input.id
         ],
     )?;
+    if rows_affected == 0 {
+        return Err(rusqlite::Error::QueryReturnedNoRows);
+    }
     get_card(conn, input.id)
 }
 
@@ -185,6 +208,21 @@ pub fn commit_ghost_card(conn: &Connection, id: i64) -> Result<Card> {
         params![id],
     )?;
     get_card(conn, id)
+}
+
+/// Reorder cards for a day atomically. `ids` is the new top-to-bottom order;
+/// each card's position is set to its index. Scoped by `date` to prevent
+/// cross-day bleed. Returns the updated cards for the day.
+pub fn reorder_cards(conn: &mut Connection, date: &str, ids: &[i64]) -> Result<Vec<Card>> {
+    let tx = conn.transaction()?;
+    for (i, id) in ids.iter().enumerate() {
+        tx.execute(
+            "UPDATE cards SET position = ?1 WHERE id = ?2 AND date = ?3",
+            params![i as i64, id, date],
+        )?;
+    }
+    tx.commit()?;
+    list_cards(conn, date)
 }
 
 // ---------------------------------------------------------------------------
@@ -353,6 +391,14 @@ mod tests {
     use super::*;
 
     #[test]
+    fn validate_date_accepts_iso_and_rejects_malformed() {
+        assert!(validate_date("2026-08-18").is_ok());
+        assert!(validate_date("2026-8-18").is_err());
+        assert!(validate_date("not-a-date").is_err());
+        assert!(validate_date("2026-08-18T00:00:00").is_err());
+    }
+
+    #[test]
     fn card_round_trip() {
         let conn = open_in_memory().unwrap();
 
@@ -427,6 +473,60 @@ mod tests {
         // Delete.
         delete_card(&conn, saved.id).unwrap();
         assert_eq!(list_cards(&conn, "2026-08-18").unwrap().len(), 1);
+    }
+
+    #[test]
+    fn reorder_cards_is_atomic_and_day_scoped() {
+        let mut conn = open_in_memory().unwrap();
+        let types = list_activity_types(&conn).unwrap();
+        let research = types.iter().find(|t| t.name == "Research").unwrap();
+
+        // Insert 3 cards on the target day.
+        let mut ids = Vec::new();
+        for i in 0..3 {
+            let card = save_card(
+                &conn,
+                &CardInput {
+                    id: 0,
+                    date: "2026-08-18".to_string(),
+                    activity_type_id: research.id,
+                    position: i,
+                    markdown: format!("card {}", i),
+                    is_ghost: false,
+                },
+            )
+            .unwrap();
+            ids.push(card.id);
+        }
+
+        // A card on another day must be untouched by reordering.
+        let other = save_card(
+            &conn,
+            &CardInput {
+                id: 0,
+                date: "2026-08-19".to_string(),
+                activity_type_id: research.id,
+                position: 0,
+                markdown: "other day".to_string(),
+                is_ghost: false,
+            },
+        )
+        .unwrap();
+
+        // Reverse the order.
+        ids.reverse();
+        let reordered = reorder_cards(&mut conn, "2026-08-18", &ids).unwrap();
+        assert_eq!(reordered.len(), 3);
+        for (i, card) in reordered.iter().enumerate() {
+            assert_eq!(card.position, i as i64);
+            assert_eq!(card.id, ids[i]);
+        }
+
+        // The other day's card is untouched.
+        let other_cards = list_cards(&conn, "2026-08-19").unwrap();
+        assert_eq!(other_cards.len(), 1);
+        assert_eq!(other_cards[0].id, other.id);
+        assert_eq!(other_cards[0].position, 0);
     }
 
     #[test]

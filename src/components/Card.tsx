@@ -241,9 +241,16 @@ export default function Card({
           const merged = el.ownerDocument.createElement(
             tag === "li" && prev.tagName.toLowerCase() === "li" ? "li" : "p",
           );
-          merged.innerHTML = parseInlineSafe(prevMd + content);
+          // Strip the predecessor's block prefix so it isn't concatenated
+          // literally into the merged content.
+          const prevTag = prev.tagName.toLowerCase();
+          let prevContent = prevMd;
+          if (prevTag === "li") prevContent = prevMd.replace(/^-\s+/, "");
+          else if (prevTag === "h1" || prevTag === "h2" || prevTag === "h3") prevContent = prevMd.slice(Number(prevTag[1]) + 1);
+          else if (prevTag === "p" && prev.parentElement?.tagName.toLowerCase() === "blockquote") prevContent = prevMd.replace(/^>\s?/, "");
+          merged.innerHTML = parseInlineSafe(prevContent + content);
           line.replaceWith(merged);
-          setCaretAtMarkdownOffset(merged, prevMd.length);
+          setCaretAtMarkdownOffset(merged, prevContent.length);
         }
         return;
       }
@@ -251,9 +258,8 @@ export default function Card({
     }
   };
 
-  const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    const text = e.clipboardData.getData("text/plain");
+  /** Insert plain text at the caret through the safe markdown path. */
+  const insertPlainText = (text: string) => {
     const sel = document.getSelection();
     if (!sel || sel.rangeCount === 0) return;
     const line = currentLine();
@@ -287,7 +293,18 @@ export default function Card({
       prev.after(tail);
       prev = tail;
     }
-    setCaretAtMarkdownOffset(prev, lines[lines.length - 1].length);
+    const finalOffset = after !== "" ? after.length : lines[lines.length - 1].length;
+    setCaretAtMarkdownOffset(prev, finalOffset);
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    insertPlainText(e.clipboardData.getData("text/plain"));
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    insertPlainText(e.dataTransfer.getData("text/plain"));
   };
 
   return (
@@ -330,6 +347,8 @@ export default function Card({
             onInput={handleInput}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
+            onDrop={handleDrop}
+            onDragOver={(e) => e.preventDefault()}
             onBlur={commit}
             role="textbox"
             aria-multiline="true"

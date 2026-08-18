@@ -16,7 +16,7 @@ export function serializeInline(node: Node): string {
   const tag = el.tagName.toLowerCase();
   if (tag === "strong") return `**${serializeChildren(el)}**`;
   if (tag === "em") return `*${serializeChildren(el)}*`;
-  if (tag === "br") return "";
+  if (tag === "br") return "\n";
   return serializeChildren(el);
 }
 

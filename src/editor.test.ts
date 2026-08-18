@@ -27,9 +27,9 @@ describe("serializeInline", () => {
     expect(serializeInline(el)).toBe("a **b** c *d*");
   });
 
-  it("ignores br elements", () => {
+  it("preserves br elements as line breaks", () => {
     const el = root("<p>a<br>b</p>");
-    expect(serializeInline(el)).toBe("ab");
+    expect(serializeInline(el)).toBe("a\nb");
   });
 });
 

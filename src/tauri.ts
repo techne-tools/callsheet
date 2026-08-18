@@ -65,6 +65,9 @@ export const saveCard = (card: CardInput): Promise<Card> =>
 export const deleteCard = (id: number): Promise<void> =>
   invoke<void>("delete_card", { id });
 
+export const reorderCards = (date: string, ids: number[]): Promise<Card[]> =>
+  invoke<Card[]>("reorder_cards", { date, ids });
+
 export const commitGhostCard = (id: number): Promise<Card> =>
   invoke<Card>("commit_ghost_card", { id });
 

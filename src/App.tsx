@@ -4,6 +4,7 @@ import {
   listCards,
   saveCard,
   deleteCard,
+  reorderCards,
   commitGhostCard,
   listActivityTypes,
   createActivityType,
@@ -62,6 +63,7 @@ export default function App() {
 
   const dateKey = toISODate(date);
   const dayPaneRef = useRef<HTMLDivElement>(null);
+  const requestedKeyRef = useRef<string>("");
 
   // Load activity types + templates once on mount.
   useEffect(() => {
@@ -81,8 +83,10 @@ export default function App() {
 
   // Load cards for the selected day (day-scoped; no cross-day bleed).
   const loadCards = useCallback(async (key: string) => {
+    requestedKeyRef.current = key;
     try {
       const loaded = await listCards(key);
+      if (requestedKeyRef.current !== key) return; // stale response, ignore
       setCards(loaded);
       setSelectedId(null);
       setEditingId(null);
@@ -113,18 +117,14 @@ export default function App() {
     async (ordered: Card[]) => {
       const reindexed = ordered.map((c, i) => ({ ...c, position: i }));
       setCards(reindexed);
-      for (const c of reindexed) {
-        await saveCard({
-          id: c.id,
-          date: c.date,
-          activityTypeId: c.activityTypeId,
-          position: c.position,
-          markdown: c.markdown,
-          isGhost: c.isGhost,
-        });
+      try {
+        const saved = await reorderCards(dateKey, reindexed.map((c) => c.id));
+        setCards(saved);
+      } catch (e) {
+        setError(calmError(e, "save"));
       }
     },
-    [],
+    [dateKey],
   );
 
   // Move the card at `fromIndex` to `toIndex` and persist.
@@ -355,14 +355,23 @@ export default function App() {
     if (selectedId == null) return;
     const card = cards.find((c) => c.id === selectedId);
     if (!card) return;
-    await navigator.clipboard.writeText(markdownToPlainText(card.markdown));
+    try {
+      await navigator.clipboard.writeText(markdownToPlainText(card.markdown));
+    } catch (e) {
+      setError(calmError(e, "save"));
+    }
   }, [cards, selectedId]);
 
   const cutSelected = useCallback(async () => {
     if (selectedId == null) return;
     const card = cards.find((c) => c.id === selectedId);
     if (!card) return;
-    await navigator.clipboard.writeText(markdownToPlainText(card.markdown));
+    try {
+      await navigator.clipboard.writeText(markdownToPlainText(card.markdown));
+    } catch (e) {
+      setError(calmError(e, "save"));
+      return;
+    }
     await handleDelete(card);
   }, [cards, selectedId, handleDelete]);
 
@@ -402,8 +411,13 @@ export default function App() {
 
       // While a card is being edited inline, the editor owns the keyboard
       // (Enter/Backspace/Tab/Delete are content operations). Only Cmd-based
-      // shortcuts still apply.
-      if (editingId != null && !mod) return;
+      // shortcuts still apply — except clipboard (Cmd+C/X/V) and undo
+      // (Cmd+Z), which the editor must handle natively.
+      if (editingId != null) {
+        if (!mod) return;
+        // The editor owns clipboard + undo while editing.
+        if (["c", "C", "x", "X", "v", "V", "z", "Z"].includes(e.key)) return;
+      }
 
       // Day nav: Cmd+Left / Cmd+Right
       if (mod && e.key === "ArrowLeft") {
@@ -498,16 +512,13 @@ export default function App() {
       // Tab / Shift+Tab navigate between cards
       if (e.key === "Tab") {
         if (editingId != null) return; // let textarea handle Tab normally
+        if (selectedId == null) return; // let Tab do normal focus traversal when no card is selected
         e.preventDefault();
-        setCards((prev) => {
-          if (prev.length === 0) return prev;
-          const idx = selectedId != null ? prev.findIndex((c) => c.id === selectedId) : -1;
-          const nextIdx = e.shiftKey
-            ? (idx - 1 + prev.length) % prev.length
-            : (idx + 1) % prev.length;
-          setSelectedId(prev[nextIdx].id);
-          return prev;
-        });
+        const idx = cards.findIndex((c) => c.id === selectedId);
+        const nextIdx = e.shiftKey
+          ? (idx - 1 + cards.length) % cards.length
+          : (idx + 1) % cards.length;
+        setSelectedId(cards[nextIdx].id);
       }
     },
     [

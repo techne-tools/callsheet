@@ -13,8 +13,27 @@ use tauri::Manager;
 
 use db::{ActivityType, Card, CardInput, Template};
 
-/// Tauri-managed state: a mutex-guarded SQLite connection.
-struct Store(Mutex<Connection>);
+/// Tauri-managed state: a mutex-guarded SQLite connection plus the path it
+/// was opened from, so a poisoned mutex can be recovered by reopening.
+struct Store {
+    conn: Mutex<Connection>,
+    path: std::path::PathBuf,
+}
+
+impl Store {
+    /// Lock the connection, recovering from a poisoned mutex by reopening the
+    /// database from the stored path.
+    fn lock(&self) -> Result<std::sync::MutexGuard<'_, Connection>, String> {
+        match self.conn.lock() {
+            Ok(guard) => Ok(guard),
+            Err(poisoned) => {
+                let conn = db::open(&self.path).map_err(|e| e.to_string())?;
+                *poisoned.into_inner() = conn;
+                self.conn.lock().map_err(|e| e.to_string())
+            }
+        }
+    }
+}
 
 /// Tracks whether the dock is currently visible (macOS). There is no getter
 /// for the current activation policy, so we track it ourselves.
@@ -26,26 +45,39 @@ struct DockVisible(Mutex<bool>);
 
 #[tauri::command]
 fn list_cards(state: tauri::State<'_, Store>, date: String) -> Result<Vec<Card>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    db::validate_date(&date)?;
+    let conn = state.lock()?;
     db::list_cards(&conn, &date).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn save_card(state: tauri::State<'_, Store>, card: CardInput) -> Result<Card, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    db::validate_date(&card.date)?;
+    let conn = state.lock()?;
     db::save_card(&conn, &card).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn delete_card(state: tauri::State<'_, Store>, id: i64) -> Result<(), String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    let conn = state.lock()?;
     db::delete_card(&conn, id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn commit_ghost_card(state: tauri::State<'_, Store>, id: i64) -> Result<Card, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    let conn = state.lock()?;
     db::commit_ghost_card(&conn, id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn reorder_cards(
+    state: tauri::State<'_, Store>,
+    date: String,
+    ids: Vec<i64>,
+) -> Result<Vec<Card>, String> {
+    db::validate_date(&date)?;
+    let mut conn = state.lock()?;
+    db::reorder_cards(&mut *conn, &date, &ids).map_err(|e| e.to_string())
 }
 
 // ---------------------------------------------------------------------------
@@ -54,7 +86,7 @@ fn commit_ghost_card(state: tauri::State<'_, Store>, id: i64) -> Result<Card, St
 
 #[tauri::command]
 fn list_activity_types(state: tauri::State<'_, Store>) -> Result<Vec<ActivityType>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    let conn = state.lock()?;
     db::list_activity_types(&conn).map_err(|e| e.to_string())
 }
 
@@ -63,13 +95,13 @@ fn create_activity_type(
     state: tauri::State<'_, Store>,
     name: String,
 ) -> Result<ActivityType, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    let conn = state.lock()?;
     db::create_activity_type(&conn, &name).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn delete_activity_type(state: tauri::State<'_, Store>, id: i64) -> Result<(), String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    let conn = state.lock()?;
     db::delete_activity_type(&conn, id)
 }
 
@@ -79,7 +111,7 @@ fn delete_activity_type(state: tauri::State<'_, Store>, id: i64) -> Result<(), S
 
 #[tauri::command]
 fn list_templates(state: tauri::State<'_, Store>) -> Result<Vec<Template>, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    let conn = state.lock()?;
     db::list_templates(&conn).map_err(|e| e.to_string())
 }
 
@@ -90,13 +122,13 @@ fn create_template(
     markdown: String,
     activity_type_id: i64,
 ) -> Result<Template, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    let conn = state.lock()?;
     db::create_template(&conn, &name, &markdown, activity_type_id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn delete_template(state: tauri::State<'_, Store>, id: i64) -> Result<(), String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    let conn = state.lock()?;
     db::delete_template(&conn, id).map_err(|e| e.to_string())
 }
 
@@ -108,7 +140,7 @@ fn update_template(
     markdown: String,
     activity_type_id: i64,
 ) -> Result<Template, String> {
-    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    let conn = state.lock()?;
     db::update_template(&conn, id, &name, &markdown, activity_type_id).map_err(|e| e.to_string())
 }
 
@@ -178,7 +210,10 @@ pub fn run() {
             let db_path = data_dir.join("callsheet.db");
             let conn = db::open(&db_path)
                 .map_err(|e| format!("failed to open database: {}", e))?;
-            app.manage(Store(Mutex::new(conn)));
+            app.manage(Store {
+                conn: Mutex::new(conn),
+                path: db_path,
+            });
             app.manage(DockVisible(Mutex::new(true)));
             Ok(())
         })
@@ -187,6 +222,7 @@ pub fn run() {
             save_card,
             delete_card,
             commit_ghost_card,
+            reorder_cards,
             list_activity_types,
             create_activity_type,
             delete_activity_type,

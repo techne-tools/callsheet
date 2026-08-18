@@ -39,15 +39,23 @@ pub fn allocate(used: &HashSet<String>) -> String {
             return colour;
         }
     }
-    // Pool exhausted: derive a stable colour from the used set so we never
-    // return a colour that is already in use.
+    // Pool exhausted: derive a stable starting hue from the used set, then
+    // increment until we find a hue whose colour is not already in use. This
+    // is guaranteed to terminate because the hue space is 360 and `used` is
+    // finite, so at most 360 candidates are checked.
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     use std::hash::{Hash, Hasher};
     let mut sorted: Vec<&String> = used.iter().collect();
     sorted.sort();
     sorted.hash(&mut hasher);
-    let h = (hasher.finish() % 360) as u32;
-    format!("hsl({}, 20%, 93%)", h)
+    let mut h = (hasher.finish() % 360) as u32;
+    loop {
+        let colour = format!("hsl({}, 20%, 93%)", h);
+        if !used.contains(&colour) {
+            return colour;
+        }
+        h = (h + 1) % 360;
+    }
 }
 
 #[cfg(test)]
@@ -77,5 +85,23 @@ mod tests {
         used.insert("hsl(260, 20%, 93%)".to_string());
         let colour = allocate(&used);
         assert!(!used.contains(&colour));
+    }
+
+    #[test]
+    fn allocate_after_pool_exhaustion_stays_unique() {
+        let mut used = HashSet::new();
+        let mut allocated = HashSet::new();
+        // Exhaust the pool and keep allocating well beyond it.
+        for _ in 0..(palette_pool().len() + 20) {
+            let colour = allocate(&used);
+            assert!(
+                !allocated.contains(&colour),
+                "colour {} was allocated twice",
+                colour
+            );
+            allocated.insert(colour.clone());
+            used.insert(colour);
+        }
+        assert_eq!(allocated.len(), palette_pool().len() + 20);
     }
 }
