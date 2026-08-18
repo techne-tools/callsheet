@@ -15,14 +15,20 @@ writing `isGhost` rows, and the app silently showing them.
 - **Parameterized SQL only** — the agent's write path must never string-concatenate.
 - **TypeScript strict + cargo test gates** must stay green.
 
-## Current state (verified 2026-08-18)
+## Current state (verified 2026-08-18, after audit commit 81db296)
 
 - DB: `app_data_dir()/callsheet.db` (`~/Library/Application Support/com.chris.callsheet/`),
   single `Mutex<Connection>` in Tauri state. **No WAL, no busy_timeout** — a second
-  process writing needs both.
+  process writing needs both. (Audit commit added `PRAGMA foreign_keys`, indexes on
+  `cards(date)` and `cards(activity_type_id)`, poisoned-mutex recovery via stored
+  path, and ISO date validation at the store boundary — none of which change the
+  concurrent-writer gap.)
+- `reorder_cards` is now transactional and day-scoped (audit commit) — orthogonal
+  hardening, not agent-layer work.
 - `list_cards(date)` returns ghosts too; `App.tsx` filters `isGhost` and renders
   `GhostCard` (commit button → `commitGhostCard`). No dismiss path.
-- `proposeGhost` (◌) is a manual placeholder — creates a ghost with fixed text.
+- `proposeGhost` (◌) is a manual placeholder — creates a ghost with fixed text via
+  `saveCard`. No `propose_ghost_card` command, no `source` column.
 - No events, no polling, no agent-facing write API. The app only reloads on date
   change / explicit actions.
 
@@ -32,15 +38,17 @@ writing `isGhost` rows, and the app silently showing them.
 
 **Goal:** safe concurrent access + a first-class propose command.
 
-1. **WAL + busy_timeout** in `db::open` (`src-tauri/src/db.rs`):
+1. **WAL + busy_timeout** in `db::open` (`src-tauri/src/db.rs`): ✅ **done (2026-08-18)**
    ```rust
    conn.pragma_update(None, "journal_mode", "WAL")?;
    conn.pragma_update(None, "busy_timeout", 5000)?;
    ```
    WAL lets the agent's script write while the app reads; busy_timeout prevents
-   `SQLITE_BUSY` on contention. Add a test asserting `journal_mode` is `wal`.
+   `SQLITE_BUSY` on contention. Test `open_enables_wal_and_busy_timeout` asserts
+   `journal_mode` is `wal` and `busy_timeout` is 5000. Verified: 11/11 cargo
+   tests, 45/45 vitest, tsc strict build.
 
-2. **New command `propose_ghost_card`** (`db.rs` + `lib.rs` + `src/tauri.ts`):
+2. **New command `propose_ghost_card`** (`db.rs` + `lib.rs` + `src/tauri.ts`): ✅ **done (2026-08-18)**
    ```rust
    pub fn propose_ghost_card(
        conn: &Connection,
@@ -50,15 +58,21 @@ writing `isGhost` rows, and the app silently showing them.
        source: &str,          // "agent" | "manual"
    ) -> Result<Card>
    ```
-   Inserts `is_ghost = 1` at the end of the day's card order. `source` is a new
-   nullable column (`ALTER TABLE` in `init_schema` via migration guard — schema
-   versioning is out of scope; a simple `PRAGMA table_info` check + `ALTER TABLE
-   ADD COLUMN` if missing is fine at this size).
+   Inserts `is_ghost = 1` at the end of the day's card order (`MAX(position)+1`,
+   day-scoped). `source` is a new nullable column on `cards`, added via a
+   `PRAGMA table_info` migration guard in `init_schema` (old DBs get
+   `ALTER TABLE ADD COLUMN`; new DBs get it in CREATE TABLE). `Card` now carries
+   `source: Option<String>` through list/get. Tests:
+   `propose_ghost_card_appends_at_end_with_source` (append order, day-scoping,
+   source round-trip) and `init_schema_migrates_old_cards_table_without_source`.
+   Verified: 13/13 cargo tests, 45/45 vitest, tsc strict build.
 
-3. **Emit a Tauri event after any card write** (`cards-changed`):
+3. **Emit a Tauri event after any card write** (`cards-changed`): ✅ **done (2026-08-18)**
    `app.emit("cards-changed", ())` from `save_card`, `delete_card`,
-   `commit_ghost_card`, `propose_ghost_card`. This is the app's only "wake up"
-   signal — silent, no UI.
+   `commit_ghost_card`, `propose_ghost_card` — emitted only after the DB write
+   succeeds, so a failed write never signals a refresh. Commands now take
+   `app: tauri::AppHandle`; `Emitter` trait imported. This is the app's only
+   "wake up" signal — silent, no UI. Verified: 13/13 cargo tests.
 
 4. **Dismiss path:** reuse existing `delete_card` — a ghost is just a card with
    `is_ghost=1`; no new command needed.
@@ -70,21 +84,28 @@ end of day, source column round-trips); `npm run build` green.
 
 **Goal:** the board notices new proposals without pinging.
 
-1. **Listen for `cards-changed`** in `App.tsx` (`@tauri-apps/api/event` — verify
-   the dep exists in `package.json`; add if missing). On event → `loadCards(dateKey)`.
-   Silent: no toast, no flash.
-
+1. **Listen for `cards-changed`** in `App.tsx` (`@tauri-apps/api/event` — the dep
+   exists in `package.json`): ✅ **done (2026-08-18)**
+   `listen("cards-changed", ...)` → `loadCards(dateKeyRef.current)`. Silent: no
+   toast, no flash. Listener registered once (effect keyed on `loadCards`),
+   unregistered on unmount with a cancelled-flag guard for the async
+   registration race.
 2. **Slow fallback poll** (30s, only while `document.visibilityState === "visible"`):
-   covers the case where the agent wrote directly and the event was missed. Clear
-   the interval on unmount. This is *presence* — the board quietly stays current.
-
-3. **GhostCard dismiss button** (`GhostCard.tsx`): small × next to "Proposed",
-   calls `delete_card`. Mirrors the card delete affordance (quiet red hover).
-
-4. **`proposeGhost` placeholder** stays as the manual demo (source="manual").
+   ✅ **done (2026-08-18)** — `setInterval` in an effect, cleared on unmount.
+   Covers the case where the agent wrote directly and the event was missed.
+   This is *presence* — the board quietly stays current.
+3. **GhostCard dismiss button** (`GhostCard.tsx`): ✅ **done (2026-08-18)**
+   Small × next to "Proposed", calls `delete_card` via `onDismiss` →
+   `handleDelete`. Ghost card is now a `div` (role=button) with a head row;
+   the × stops propagation so it never triggers commit. Mirrors the card
+   delete affordance (quiet red hover).
+4. **`proposeGhost` placeholder** stays as the manual demo: ✅ **done (2026-08-18)**
+   Now calls the real `proposeGhostCard(date, typeId, text, "manual")` command
+   (source="manual") instead of a raw `saveCard` ghost insert.
 
 **Acceptance:** vitest green (new tests: event listener triggers reload, poll
-interval set/cleared); manual: run `npm run tauri dev`, insert a ghost row via
+interval set/cleared — `src/agent-wakeup.test.tsx`, 3 tests); manual: run
+`npm run tauri dev`, insert a ghost row via
 sqlite3 CLI, watch it appear within 30s with no notification.
 
 ## Phase C — Agent write path (script)

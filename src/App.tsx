@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
 import type { ActivityType, Card, Template } from "./tauri";
 import {
   listCards,
@@ -6,6 +7,7 @@ import {
   deleteCard,
   reorderCards,
   commitGhostCard,
+  proposeGhostCard,
   listActivityTypes,
   createActivityType,
   deleteActivityType,
@@ -98,6 +100,37 @@ export default function App() {
   useEffect(() => {
     void loadCards(dateKey);
   }, [dateKey, loadCards]);
+
+  // The agent layer writes cards directly to the store. `cards-changed` is the
+  // app's only wake-up signal — silent, no toast, no flash. Reload the current
+  // day so proposals appear without the user asking.
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+    (async () => {
+      const un = await listen("cards-changed", () => {
+        if (!cancelled) void loadCards(dateKeyRef.current);
+      });
+      if (cancelled) un();
+      else unlisten = un;
+    })();
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [loadCards]);
+
+  // Slow fallback poll: if the agent wrote directly and the event was missed
+  // (e.g. the app was asleep), quietly re-sync while the window is visible.
+  // Presence, not pressure — 30s, no UI, cleared on unmount.
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void loadCards(dateKeyRef.current);
+      }
+    }, 30_000);
+    return () => window.clearInterval(id);
+  }, [loadCards]);
 
   const typeById = useMemo(() => {
     const m = new Map<number, ActivityType>();
@@ -314,19 +347,12 @@ export default function App() {
     const typeId = activityTypes[0]?.id;
     if (typeId == null) return;
     try {
-      await saveCard({
-        id: 0,
-        date: dateKey,
-        activityTypeId: typeId,
-        position: cards.length,
-        markdown: "A quiet suggestion for this day.",
-        isGhost: true,
-      });
+      await proposeGhostCard(dateKey, typeId, "A quiet suggestion for this day.", "manual");
       await loadCards(dateKey);
     } catch (e) {
       setError(calmError(e, "save"));
     }
-  }, [activityTypes, dateKey, cards.length, loadCards]);
+  }, [activityTypes, dateKey, loadCards]);
 
   // --- Card type re-shade --------------------------------------------------
 
@@ -762,7 +788,12 @@ export default function App() {
               {cards
                 .filter((c) => c.isGhost)
                 .map((g) => (
-                  <GhostCard key={`ghost-${g.id}`} card={g} onCommit={() => void commitGhost(g)} />
+                  <GhostCard
+                    key={`ghost-${g.id}`}
+                    card={g}
+                    onCommit={() => void commitGhost(g)}
+                    onDismiss={() => void handleDelete(g)}
+                  />
                 ))}
             </div>
           )}

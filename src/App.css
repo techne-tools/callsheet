@@ -646,6 +646,12 @@ body {
   color: var(--ghost-hover-ink);
   box-shadow: var(--shadow-card);
 }
+.ghost-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
 .ghost-card__label {
   font-family: var(--font-mono);
   font-size: var(--fs-label);
@@ -653,6 +659,25 @@ body {
   letter-spacing: 0.08em;
   color: var(--ghost-label);
   margin-bottom: 3px;
+}
+/* Dismiss mirrors the card delete affordance: quiet red on hover, never loud. */
+.ghost-card__dismiss {
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ink-secondary);
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 120ms var(--ease-out), border-color 120ms var(--ease-out);
+}
+.ghost-card__dismiss:hover {
+  color: hsl(0, 60%, 40%);
+  border-color: hsl(0, 60%, 70%);
 }
 
 /* ---------------------------------------------------------------------------

@@ -14,6 +14,7 @@ export interface Card {
   position: number;
   markdown: string;
   isGhost: boolean;
+  source: string | null;
 }
 
 export interface CardInput {
@@ -70,6 +71,14 @@ export const reorderCards = (date: string, ids: number[]): Promise<Card[]> =>
 
 export const commitGhostCard = (id: number): Promise<Card> =>
   invoke<Card>("commit_ghost_card", { id });
+
+export const proposeGhostCard = (
+  date: string,
+  activityTypeId: number,
+  markdown: string,
+  source: string,
+): Promise<Card> =>
+  invoke<Card>("propose_ghost_card", { date, activityTypeId, markdown, source });
 
 // ---------------------------------------------------------------------------
 // Activity types

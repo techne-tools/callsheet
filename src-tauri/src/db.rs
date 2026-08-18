@@ -41,11 +41,24 @@ pub fn init_schema(conn: &Connection) -> Result<()> {
             activity_type_id INTEGER NOT NULL REFERENCES activity_types(id),
             position INTEGER NOT NULL,
             markdown TEXT NOT NULL DEFAULT '',
-            is_ghost INTEGER NOT NULL DEFAULT 0
+            is_ghost INTEGER NOT NULL DEFAULT 0,
+            source TEXT
         );
         CREATE INDEX IF NOT EXISTS idx_cards_date ON cards(date);
         CREATE INDEX IF NOT EXISTS idx_cards_activity ON cards(activity_type_id);",
-    )
+    )?;
+    // Migration guard: older databases lack the `source` column on cards.
+    // Schema versioning is out of scope; a PRAGMA check + ALTER is fine at
+    // this size. New databases get the column from the CREATE TABLE above.
+    let has_source: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('cards') WHERE name = 'source'",
+        [],
+        |row| row.get(0),
+    )?;
+    if has_source == 0 {
+        conn.execute("ALTER TABLE cards ADD COLUMN source TEXT", [])?;
+    }
+    Ok(())
 }
 
 /// Seed the five activity types if the table is empty.
@@ -68,9 +81,14 @@ pub fn seed_activity_types(conn: &Connection) -> Result<()> {
 }
 
 /// Open (or create) the database at the given path and run schema + seed.
+///
+/// WAL journal mode lets a second process (the agent's proposal script) write
+/// while the app reads; busy_timeout prevents `SQLITE_BUSY` on contention.
 pub fn open(path: &std::path::Path) -> Result<Connection> {
     let conn = Connection::open(path)?;
     conn.pragma_update(None, "foreign_keys", true)?;
+    conn.pragma_update(None, "journal_mode", "WAL")?;
+    conn.pragma_update(None, "busy_timeout", 5000)?;
     init_schema(&conn)?;
     seed_activity_types(&conn)?;
     Ok(conn)
@@ -116,6 +134,7 @@ pub struct Card {
     pub position: i64,
     pub markdown: String,
     pub is_ghost: bool,
+    pub source: Option<String>,
 }
 
 /// Input shape for saving a card (id 0 = insert).
@@ -138,13 +157,14 @@ fn row_to_card(row: &rusqlite::Row) -> Result<Card> {
         position: row.get(3)?,
         markdown: row.get(4)?,
         is_ghost: row.get::<_, i64>(5)? != 0,
+        source: row.get(6)?,
     })
 }
 
 /// List cards for a given day, ordered by position.
 pub fn list_cards(conn: &Connection, date: &str) -> Result<Vec<Card>> {
     let mut stmt = conn.prepare(
-        "SELECT id, date, activity_type_id, position, markdown, is_ghost
+        "SELECT id, date, activity_type_id, position, markdown, is_ghost, source
          FROM cards WHERE date = ?1 ORDER BY position ASC",
     )?;
     let rows = stmt.query_map(params![date], row_to_card)?;
@@ -188,7 +208,7 @@ pub fn save_card(conn: &Connection, input: &CardInput) -> Result<Card> {
 
 fn get_card(conn: &Connection, id: i64) -> Result<Card> {
     conn.query_row(
-        "SELECT id, date, activity_type_id, position, markdown, is_ghost
+        "SELECT id, date, activity_type_id, position, markdown, is_ghost, source
          FROM cards WHERE id = ?1",
         params![id],
         row_to_card,
@@ -207,6 +227,30 @@ pub fn commit_ghost_card(conn: &Connection, id: i64) -> Result<Card> {
         "UPDATE cards SET is_ghost = 0 WHERE id = ?1",
         params![id],
     )?;
+    get_card(conn, id)
+}
+
+/// Propose a ghost card for a day: insert `is_ghost = 1` at the end of the
+/// day's card order. `source` records who proposed it ("agent" | "manual").
+/// Returns the stored card.
+pub fn propose_ghost_card(
+    conn: &Connection,
+    date: &str,
+    activity_type_id: i64,
+    markdown: &str,
+    source: &str,
+) -> Result<Card> {
+    let position: i64 = conn.query_row(
+        "SELECT COALESCE(MAX(position) + 1, 0) FROM cards WHERE date = ?1",
+        params![date],
+        |row| row.get(0),
+    )?;
+    conn.execute(
+        "INSERT INTO cards (date, activity_type_id, position, markdown, is_ghost, source)
+         VALUES (?1, ?2, ?3, ?4, 1, ?5)",
+        params![date, activity_type_id, position, markdown, source],
+    )?;
+    let id = conn.last_insert_rowid();
     get_card(conn, id)
 }
 
@@ -389,6 +433,105 @@ pub fn update_template(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn open_enables_wal_and_busy_timeout() {
+        let dir = std::env::temp_dir().join(format!("callsheet-wal-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("test.db");
+        let conn = open(&path).unwrap();
+        let mode: String = conn
+            .query_row("PRAGMA journal_mode", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(mode, "wal");
+        let timeout: i64 = conn
+            .query_row("PRAGMA busy_timeout", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(timeout, 5000);
+        drop(conn);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn propose_ghost_card_appends_at_end_with_source() {
+        let conn = open_in_memory().unwrap();
+        let types = list_activity_types(&conn).unwrap();
+        let research = types.iter().find(|t| t.name == "Research").unwrap();
+
+        // Two real cards first.
+        for i in 0..2 {
+            save_card(
+                &conn,
+                &CardInput {
+                    id: 0,
+                    date: "2026-08-18".to_string(),
+                    activity_type_id: research.id,
+                    position: i,
+                    markdown: format!("card {}", i),
+                    is_ghost: false,
+                },
+            )
+            .unwrap();
+        }
+
+        // Propose a ghost — lands at the end of the day's order.
+        let ghost = propose_ghost_card(&conn, "2026-08-18", research.id, "proposal", "agent")
+            .unwrap();
+        assert!(ghost.is_ghost);
+        assert_eq!(ghost.position, 2);
+        assert_eq!(ghost.source.as_deref(), Some("agent"));
+
+        // A second proposal appends after the first.
+        let ghost2 = propose_ghost_card(&conn, "2026-08-18", research.id, "proposal 2", "manual")
+            .unwrap();
+        assert_eq!(ghost2.position, 3);
+        assert_eq!(ghost2.source.as_deref(), Some("manual"));
+
+        // Day-scoping: proposing on another day starts at position 0.
+        let other = propose_ghost_card(&conn, "2026-08-19", research.id, "tomorrow", "agent")
+            .unwrap();
+        assert_eq!(other.position, 0);
+
+        // List returns ghosts with source intact.
+        let cards = list_cards(&conn, "2026-08-18").unwrap();
+        assert_eq!(cards.len(), 4);
+        assert_eq!(cards[2].source.as_deref(), Some("agent"));
+        assert_eq!(cards[3].source.as_deref(), Some("manual"));
+    }
+
+    #[test]
+    fn init_schema_migrates_old_cards_table_without_source() {
+        // Simulate a pre-source database: create the old schema by hand, then
+        // run init_schema and confirm the column is added and usable.
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE cards (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                date TEXT NOT NULL,
+                activity_type_id INTEGER NOT NULL,
+                position INTEGER NOT NULL,
+                markdown TEXT NOT NULL DEFAULT '',
+                is_ghost INTEGER NOT NULL DEFAULT 0
+            );",
+        )
+        .unwrap();
+        init_schema(&conn).unwrap();
+        let has_source: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('cards') WHERE name = 'source'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(has_source, 1);
+        // The column is usable after migration.
+        conn.execute(
+            "INSERT INTO cards (date, activity_type_id, position, markdown, is_ghost, source)
+             VALUES ('2026-08-18', 1, 0, 'x', 1, 'agent')",
+            [],
+        )
+        .unwrap();
+    }
 
     #[test]
     fn validate_date_accepts_iso_and_rejects_malformed() {

@@ -24,12 +24,17 @@ CREATE TABLE IF NOT EXISTS cards (
   activity_type_id INTEGER NOT NULL REFERENCES activity_types(id),
   position INTEGER NOT NULL,
   markdown TEXT NOT NULL DEFAULT '',
-  is_ghost INTEGER NOT NULL DEFAULT 0
+  is_ghost INTEGER NOT NULL DEFAULT 0,
+  source TEXT                    -- "agent" | "manual" (nullable; who proposed)
 );
 ```
 
 - Parameterized queries only. Never string-concatenate SQL.
 - All card state is scoped by `date` — no cross-day bleed.
+- `source` is added by a migration guard in `init_schema` (PRAGMA table_info
+  check + `ALTER TABLE ADD COLUMN` for pre-existing DBs; new DBs get it in
+  CREATE TABLE). The app migrates on next launch — the agent script must be
+  schema-tolerant until then.
 
 ## Seed activity types (exact DESIGN.md HSL tokens)
 
@@ -61,6 +66,13 @@ Cards:
 - `save_card(card: CardInput) -> Card`  (upsert by id; 0 = insert)
 - `delete_card(id: i64) -> ()`
 - `commit_ghost_card(id: i64) -> Card`  (sets is_ghost=0)
+- `propose_ghost_card(date: String, activity_type_id: i64, markdown: String, source: String) -> Card`
+  (inserts is_ghost=1 at end of day's order; source = "agent" | "manual")
+
+Events (agent wake-up):
+- `cards-changed` — emitted after any card write (`save_card`, `delete_card`,
+  `commit_ghost_card`, `propose_ghost_card`). Silent; the frontend reloads the
+  current day. This is the app's only wake-up signal.
 
 Activity types:
 - `list_activity_types() -> Vec<ActivityType>`
@@ -78,7 +90,7 @@ Window presence:
 ## Data shapes (serde, camelCase in JSON)
 
 ```rust
-struct Card { id: i64, date: String, activity_type_id: i64, position: i64, markdown: String, is_ghost: bool }
+struct Card { id: i64, date: String, activity_type_id: i64, position: i64, markdown: String, is_ghost: bool, source: Option<String> }
 struct CardInput { id: i64, date: String, activity_type_id: i64, position: i64, markdown: String, is_ghost: bool }
 struct ActivityType { id: i64, name: String, colour: String, is_seed: bool }
 struct Template { id: i64, name: String, markdown: String, activity_type_id: i64 }

@@ -42,9 +42,10 @@
   substitute your own write_file for a run's deliverable.
 
 ## Current phase
-**8 — Review** (Hermes + Chris, interactive) — **APPROVED 2026-08-18**
+**9 — Agent layer** (Hermes, 2026-08-18) — A1–A4 + B1–B4 + C1–C2 + D1 + E1–E2 done; gates green.
 
 ## Handoff log
+- **Phase 9 (Hermes, 2026-08-18):** Agent layer implemented per PLAN-AGENT-LAYER.md. Backend: WAL + busy_timeout (A1), `propose_ghost_card` command + `source` column with migration guard (A2), `cards-changed` event after card writes (A3), dismiss reuses `delete_card` (A4). Frontend: silent `cards-changed` listener + 30s visible-only fallback poll (B1–B2), ghost dismiss × (B3), manual propose now uses the real command with source="manual" (B4). Agent write path: `~/.hermes/scripts/callsheet-propose.py` (list/propose/dismiss, stdlib-only, WAL-safe, schema-tolerant for pre-migration DBs) — live round-trip verified (C1–C2). Cron: `callsheet-daily-proposals` daily 07:00 deliver=local (D1). Skill `callsheet-agent` + docs (CONTRACT.md, CHANGELOG.md v0.2.0) (E1–E2). Gates: cargo 13/13, vitest 48/48 (incl. 3 new agent-wakeup tests), tsc strict build PASS. Note: `npm run test` now sets NODE_ENV=test (react's `act` unavailable under ambient NODE_ENV=production).
 - **Phase 0 (opencode):** Recon complete — RECON.md written, TASK.md status updated. Verified by Hermes: all 5 acceptance criteria met; spot-checks confirmed (Cargo.lock untracked, rusqlite absent, no test script). Ledger: verified.
 - **Phase 1 (bedrock):** Done pre-pipeline in root commit c8f9cad (AGENTS.md + .agents/ committed). Verified by recon.
 - **Phase 2 (agy + Chris):** First-pass sketch produced; Chris amendments applied (accent borders, custom types + colour uniqueness, window presence modes, smaller text, clipboard ops, ghost cards approved) → DESIGN-SKETCH.md v2 signed off 2026-08-18.

@@ -9,7 +9,7 @@ mod db;
 use std::sync::Mutex;
 
 use rusqlite::Connection;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 use db::{ActivityType, Card, CardInput, Template};
 
@@ -51,22 +51,56 @@ fn list_cards(state: tauri::State<'_, Store>, date: String) -> Result<Vec<Card>,
 }
 
 #[tauri::command]
-fn save_card(state: tauri::State<'_, Store>, card: CardInput) -> Result<Card, String> {
+fn save_card(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Store>,
+    card: CardInput,
+) -> Result<Card, String> {
     db::validate_date(&card.date)?;
     let conn = state.lock()?;
-    db::save_card(&conn, &card).map_err(|e| e.to_string())
+    let saved = db::save_card(&conn, &card).map_err(|e| e.to_string())?;
+    app.emit("cards-changed", ()).map_err(|e| e.to_string())?;
+    Ok(saved)
 }
 
 #[tauri::command]
-fn delete_card(state: tauri::State<'_, Store>, id: i64) -> Result<(), String> {
+fn delete_card(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Store>,
+    id: i64,
+) -> Result<(), String> {
     let conn = state.lock()?;
-    db::delete_card(&conn, id).map_err(|e| e.to_string())
+    db::delete_card(&conn, id).map_err(|e| e.to_string())?;
+    app.emit("cards-changed", ()).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn commit_ghost_card(state: tauri::State<'_, Store>, id: i64) -> Result<Card, String> {
+fn commit_ghost_card(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Store>,
+    id: i64,
+) -> Result<Card, String> {
     let conn = state.lock()?;
-    db::commit_ghost_card(&conn, id).map_err(|e| e.to_string())
+    let card = db::commit_ghost_card(&conn, id).map_err(|e| e.to_string())?;
+    app.emit("cards-changed", ()).map_err(|e| e.to_string())?;
+    Ok(card)
+}
+
+#[tauri::command]
+fn propose_ghost_card(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Store>,
+    date: String,
+    activity_type_id: i64,
+    markdown: String,
+    source: String,
+) -> Result<Card, String> {
+    db::validate_date(&date)?;
+    let conn = state.lock()?;
+    let card = db::propose_ghost_card(&conn, &date, activity_type_id, &markdown, &source)
+        .map_err(|e| e.to_string())?;
+    app.emit("cards-changed", ()).map_err(|e| e.to_string())?;
+    Ok(card)
 }
 
 #[tauri::command]
@@ -222,6 +256,7 @@ pub fn run() {
             save_card,
             delete_card,
             commit_ghost_card,
+            propose_ghost_card,
             reorder_cards,
             list_activity_types,
             create_activity_type,
