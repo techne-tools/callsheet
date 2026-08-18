@@ -136,8 +136,30 @@ UI. Run the context setup once: `node .agents/skills/impeccable/scripts/context.
   record it in TASK.md Status + PIPELINE.md handoff log rather than guessing.
 
 ## Status
-- [ ] In progress
-- [ ] Done — _agent writes summary of what changed here on exit_
+- [x] In progress
+- [x] Done — _agent writes summary of what changed here on exit_
+
+### Phase 4 build summary (opencode, autonomous)
+
+**Frontend (`src/`)** — greet demo replaced with the day board:
+- `App.tsx` → day board composing card pane, collapsible sidebar, ghost cards, day nav.
+- `Card.tsx` (activity-type fill + derived accent border, markdown render/edit, grab handle), `GhostCard.tsx` (dashed-border proposal, click commits), `Sidebar.tsx` (durable templates, drag→instantiate), `DayNav.tsx` (gutter arrows + quiet centred date header).
+- `tauri.ts` — typed bridge for all 12 commands + `deriveBorder`/`deriveTextSecondary` HSL helpers.
+- `markdown.ts` — dependency-light renderer (H1–H3, bold, italic, bullets, blockquotes), HTML-escaped.
+- Keyboard grammar (Tab/Shift+Tab, Cmd+Shift+Up/Down, Enter, Esc), clipboard (Cmd+C/V/X), day nav (Cmd+Left/Right).
+- `App.css` — full design-system tokens from design.json; browser surfaces themed (selection, caret, focus, scrollbar); no greet-demo colours.
+- Vitest: `markdown.test.ts` + `tauri.test.ts` (12 tests). `npm test` passes.
+
+**Backend (`src-tauri/`)**:
+- `Cargo.toml` — added `rusqlite` (bundled); dropped unused `tauri-plugin-opener`.
+- `db.rs` — SQLite store (schema per CONTRACT.md), seed of 5 activity types with exact HSL tokens, parameterized queries only, day-scoped cards.
+- `colour_allocator.rs` — 14-pastel pool, hard uniqueness invariant.
+- `lib.rs` — 12 Tauri commands (`Result<..., String>`), managed `Store` + `DockVisible` state, window presence (normal/statusbar/dock, macOS activation policy).
+- `cargo test`: 5 tests pass (allocator uniqueness, card round-trip, activity-type colour, template round-trip).
+
+**Verification:** `npm run build` PASS (TS strict), `npm test` PASS (12), `cargo check` + `cargo test` PASS (5). Detector: 1 documented advisory (sidebar `transition: width` — one-shot collapse). DESIGN.md updated with implementation resolutions (font stack, 13px, radius 12px/6px, spacing).
+
+**Contract:** `CONTRACT.md` written as the shared interface; both lanes reconciled against it (all 12 command names + camelCase shapes match).
 
 ## Evidence
 _Ledger: `~/Development/agent-dispatch/evidence <repo> <task> <state>`._
