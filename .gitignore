@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Impeccable tooling — reinstall per worktree via: npx impeccable install
+.agents/skills/
+.codex/
+.opencode/
