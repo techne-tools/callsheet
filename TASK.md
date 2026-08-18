@@ -1,165 +1,78 @@
-# TASK: callsheet — Phase 4: Build (bones validated, weirdness fixed, hard bits done)
+# TASK: callsheet — Phase 7: Fix pass (approved design-review fixes)
 
 ## Goal
-Build the working bones of callsheet from the design truth (PRODUCT.md,
-DESIGN.md, `.impeccable/design.json` — all committed in f91b84d). The app
-must be runnable (`npm run tauri dev`), implement the signed-off visual world,
-and have the hard structural bits (SQLite persistence, colour-uniqueness
-allocator, window presence modes) actually working — not stubbed.
+Implement ALL 9 items from the phase-6 fix list (DESIGN_REVIEW.md, committed
+28eb850, triaged by Chris: all approved). Two passes, one commit each:
+1. **Compliance sweep** — tokenise hard-coded HSL, fix the detector advisory,
+   normalise contrast.
+2. **Design pass** — the ergonomic fixes (undo, error copy, title, keyboard
+   hint, dead props, comment).
 
 ## Prerequisite
-Phase 3 design capture is DONE and verified (commit f91b84d). The design
-truth is the contract — follow it exactly. Where something is unresolved
-(e.g. font family, corner radius marked "to be resolved during
-implementation"), pick a calm minimal default consistent with the north star
-(The Quiet Day-Board) and note it in DESIGN.md as implemented.
+Phase 6 fix list exists and Chris triaged ALL 9 items as approved. Work ONLY
+these items — nothing outside the list.
 
-**Tooling (Q22):** impeccable is vendored in this worktree — use
-`.agents/skills/impeccable/` (or `.opencode/skills/impeccable/`) as the skill
-base, NEVER `~/.hermes/skills/impeccable/` (sandbox rejects external reads).
-Load `.agents/skills/impeccable/reference/craft-floor.md` before editing any
-UI. Run the context setup once: `node .agents/skills/impeccable/scripts/context.mjs`.
+## The approved fix list (from DESIGN_REVIEW.md)
 
-## The design truth (signed off by Chris — non-negotiable)
+### P1
+1. **Unguarded delete** — `src/components/Card.tsx:99-102`: Backspace on a
+   selected card deletes instantly. Fix: undo — snapshot the last deleted
+   card in App state, Cmd+Z restores it (more on-voice than a modal).
+2. **Raw error text** — `src/App.tsx:414-416`: renders `String(e)` verbatim.
+   Fix: map known errors to calm copy ("Couldn't save this card. It's still
+   here — try again."), keep technical detail in a console log.
 
-- **Presence not pressure.** No reminders, notifications, alert tones,
-  analytics, or time-blocking. The app holds, it never pings.
-- **Day surface:** single centred vertical column of cards for today; no
-  timeline, no hour-grid, no hour-scrolling.
-- **Colour grammar:** five seed activity types, low-saturation pastel fills
-  (~92–94% lightness) each framed by a slightly darker accent border (same
-  hue, ~70% lightness):
-  - Research Slate `hsl(215,15%,93%)` fill / `hsl(215,15%,70%)` border
-  - Making Sage `hsl(120,15%,92%)` / `hsl(120,15%,70%)`
-  - Teaching Ochre `hsl(38,30%,93%)` / `hsl(38,30%,70%)`
-  - Body Rose `hsl(350,20%,94%)` / `hsl(350,20%,70%)`
-  - Admin Sand `hsl(30,10%,93%)` / `hsl(30,10%,70%)`
-  - Neutrals: Ink `hsl(0,0%,6%)`, Paper `hsl(0,0%,97%)`, Ghost Border `hsl(0,0%,60%)`
-- **Custom activity types:** user-addable; auto-assigned pastel from a
-  palette pool; **colour uniqueness is a hard invariant** — the allocator
-  tracks the used set and never reuses a colour across types.
-- **Durable vs provisional:** collapsible left sidebar lists durable repeatable
-  templates (the call board); dragging a template into the day pane
-  instantiates a provisional card; editing/deleting a card never touches the
-  template.
-- **Markdown in cards:** H1–H3, bold, italic, bullet lists, blockquotes.
-  Single click edits raw text; blur renders + saves.
-- **Clipboard:** cards behave like text — Cmd+C / Cmd+V / Cmd+X on selected
-  cards.
-- **Drag-drop & keyboard:** grab handle for mouse reorder; Tab/Shift+Tab
-  navigate; Cmd+Shift+Up/Down shift order; Enter edit; Esc save+blur.
-- **Day navigation:** left/right gutter arrows; Cmd+Left/Right; quiet centred
-  date header.
-- **Window presence (3 modes):** window open (normal window order — never
-  floats above other windows until focused); status bar (minimise to menu
-  bar); dock toggle (hide/show in dock).
-- **Agent presence:** faint dashed-border ghost cards proposed at the bottom
-  of the stack; click commits; never pings or notifies. (The agent layer
-  itself is Hermes/Noema reading the SQLite store — the UI just needs the
-  ghost-card surface + a way proposals can be written to the store.)
-- **Typography:** smaller than default; dense, quiet; type recedes behind
-  colour.
-- **Colour accessibility:** activity types must be distinguishable by more
-  than hue alone (accent border + text affordances).
+### P2
+3. **Stock window title** — `index.html:7`: "Tauri + React + Typescript" +
+   vite.svg favicon. Fix: `<title>callsheet</title>`, replace favicon with a
+   quiet inline SVG or drop the link.
+4. **Hard-coded HSL not tokenised** — `src/App.css`: ~15 hard-coded HSL
+   values (selection, focus-visible, hover states, caret, ghost hover,
+   template hover, day-pane--over). Fix: promote to custom properties in
+   `:root` (`--accent-focus`, `--ghost-hover`, `--ghost-label`, etc.).
+5. **Keyboard grammar invisible** — Fix: quiet one-line hint in the empty
+   state ("Tab to move between cards · Cmd+Shift+↑↓ to reorder") or a small
+   "?" affordance. Keep it on-voice — no modal, no tutorial.
 
-## Scope
-
-### Frontend (React 19 + TS strict)
-- Replace the stock greet demo entirely. App.tsx → the day board.
-- Card pane: vertical column of activity cards, whole day visible at once.
-- Card: activity-type colour (fill + accent border), markdown render/edit
-  (click to edit raw, blur to save), grab handle.
-- Sidebar: collapsible left panel of durable templates; drag into pane
-  instantiates a provisional card.
-- Ghost cards: dashed-border proposal cards at bottom of stack, click to
-  commit.
-- Keyboard grammar + clipboard ops on selected cards.
-- Day navigation (gutter arrows, Cmd+Left/Right, quiet date header).
-- Markdown: use a small, calm markdown renderer (e.g. `marked` + minimal
-  styles, or hand-rolled for the H1–H3/bold/italic/bullets/blockquote subset —
-  your call, keep it dependency-light).
-
-### Backend (Rust / Tauri v2)
-- Add `rusqlite` (bundled feature) to Cargo.toml — recon confirmed it is
-  MISSING; this is the phase that adds it.
-- SQLite store (single file, e.g. `callsheet.db` in app data dir):
-  - `activity_types` table (id, name, colour token, is_seed) — the durable
-    list, including custom types
-  - `templates` table (durable sidebar items)
-  - `cards` table (id, date, activity_type_id, position, markdown, is_ghost)
-  - **Parameterized queries only** — never string-concatenate SQL.
-  - Day-scoped state: no cross-day bleed.
-- Tauri commands returning `Result<..., String>`: list/get/save/delete cards
-  per day, CRUD activity types + templates, move card, commit ghost card.
-- Colour allocator lives in Rust: tracks used colours, assigns from palette
-  pool, enforces uniqueness (hard invariant).
-- Window presence: normal window; Tauri menu bar / dock hide-show wiring for
-  the three modes (macOS). No floating-above behavior.
-
-### Tests
-- Add Vitest (frontend) and `cargo test` (backend) — recon confirmed neither
-  is wired. At minimum: colour-allocator uniqueness test (Rust), a card
-  store round-trip test, one markdown render test.
+### P3
+6. **Sidebar width transition** — `src/App.css:341` animates `width`
+   (detector finding). Fix: `grid-template-columns` animation or accept as
+   documented (if you accept, note it in the commit message).
+7. **Ghost-card label contrast** — `.ghost-card__label` 11px uppercase
+   `hsl(0,0%,55%)` on paper ≈ 3.2:1. Fix: darken to ~40% lightness.
+8. **Dead nav props** — `src/App.tsx:406-407`: `canGoPrev`/`canGoNext`
+   hard-coded `true`. Fix: wire to actual bounds or remove the dead props.
+9. **`dangerouslySetInnerHTML` comment** — `src/components/Card.tsx:97` and
+   `src/components/GhostCard.tsx:19`: add a one-line comment explaining the
+   markdown renderer HTML-escapes (test-proven), so future maintainers know
+   it is safe.
 
 ## Out of scope
-- No agentic/Hermes integration beyond the ghost-card store surface (that is
-  a later phase).
-- No drudge polish (phase 5), no design review fixes (phases 6–7).
-- No CI (not in scope for this pipeline).
-- Do NOT implement calendar-event awareness ("shapes of the day") — not in
-  the signed sketch.
+- Redesign — refinement preserves the incumbent world; nothing outside the
+  fix list
+- New design tokens beyond the ones the fix list names
+- Test fixture changes, docs rewrites, dependency changes
+- `git add -A` — stage only files you touched
 
 ## Acceptance criteria
-- [ ] `npm run tauri dev` runs; app opens to the day board (no greet demo)
-- [ ] `npm run build` passes (TS strict is the gate)
-- [ ] `cargo check` / `cargo test` pass in `src-tauri/`
-- [ ] Vitest passes for the added frontend tests
-- [ ] SQLite persistence works: cards, templates, activity types survive a
-      restart; day-scoped (no bleed)
-- [ ] Colour allocator enforces uniqueness (test proves it)
-- [ ] All five seed types present with exact DESIGN.md HSL tokens; ghost
-      cards, sidebar, keyboard grammar, clipboard, day nav implemented
-- [ ] Window presence modes implemented (normal / status bar / dock toggle)
-- [ ] Detector run clean-ish: `npx impeccable detect src/ src-tauri/` — no
-      new severe findings; scaffold greet-demo colours gone; any residual
-      findings are documented advisories with rationale, or gitignored report
-      (do NOT write to /tmp)
-- [ ] Chore commit(s) landed; worktree git status clean
-- [ ] DESIGN.md updated with implementation resolutions (font family, radius,
-      spacing chosen)
+- [ ] All 9 fixes implemented
+- [ ] Detector re-run clean on touched files (or named evidence for ignores)
+- [ ] Tests + build green (`npm run build`, `npm test`, `cargo test`)
+- [ ] One commit per pass (compliance sweep, then design pass), fix list in
+      the message, deliberate non-fixes flagged
+- [ ] Worktree git status clean apart from staged changes
 
 ## Harness & budget
 - Harness: opencode
-- Budget: generous — this is the main build phase. Expect multiple passes.
-  Work only inside this worktree. No /tmp paths.
-- If you hit a blocker that is architectural (not just fiddly), stop and
-  record it in TASK.md Status + PIPELINE.md handoff log rather than guessing.
+- Budget: ~1–2 h; bounded QA — inspect once, fix in one batch, confirm at
+  most once more, then stop polishing
+- Work only inside this worktree. Do NOT use /tmp paths (sandbox auto-rejects).
+- Impeccable is vendored at `.agents/skills/impeccable/` — use those paths,
+  NEVER `~/.hermes/skills/`.
 
 ## Status
-- [x] In progress
-- [x] Done — _agent writes summary of what changed here on exit_
-
-### Phase 4 build summary (opencode, autonomous)
-
-**Frontend (`src/`)** — greet demo replaced with the day board:
-- `App.tsx` → day board composing card pane, collapsible sidebar, ghost cards, day nav.
-- `Card.tsx` (activity-type fill + derived accent border, markdown render/edit, grab handle), `GhostCard.tsx` (dashed-border proposal, click commits), `Sidebar.tsx` (durable templates, drag→instantiate), `DayNav.tsx` (gutter arrows + quiet centred date header).
-- `tauri.ts` — typed bridge for all 12 commands + `deriveBorder`/`deriveTextSecondary` HSL helpers.
-- `markdown.ts` — dependency-light renderer (H1–H3, bold, italic, bullets, blockquotes), HTML-escaped.
-- Keyboard grammar (Tab/Shift+Tab, Cmd+Shift+Up/Down, Enter, Esc), clipboard (Cmd+C/V/X), day nav (Cmd+Left/Right).
-- `App.css` — full design-system tokens from design.json; browser surfaces themed (selection, caret, focus, scrollbar); no greet-demo colours.
-- Vitest: `markdown.test.ts` + `tauri.test.ts` (12 tests). `npm test` passes.
-
-**Backend (`src-tauri/`)**:
-- `Cargo.toml` — added `rusqlite` (bundled); dropped unused `tauri-plugin-opener`.
-- `db.rs` — SQLite store (schema per CONTRACT.md), seed of 5 activity types with exact HSL tokens, parameterized queries only, day-scoped cards.
-- `colour_allocator.rs` — 14-pastel pool, hard uniqueness invariant.
-- `lib.rs` — 12 Tauri commands (`Result<..., String>`), managed `Store` + `DockVisible` state, window presence (normal/statusbar/dock, macOS activation policy).
-- `cargo test`: 5 tests pass (allocator uniqueness, card round-trip, activity-type colour, template round-trip).
-
-**Verification:** `npm run build` PASS (TS strict), `npm test` PASS (12), `cargo check` + `cargo test` PASS (5). Detector: 1 documented advisory (sidebar `transition: width` — one-shot collapse). DESIGN.md updated with implementation resolutions (font stack, 13px, radius 12px/6px, spacing).
-
-**Contract:** `CONTRACT.md` written as the shared interface; both lanes reconciled against it (all 12 command names + camelCase shapes match).
+- [ ] In progress
+- [ ] Done — _agent writes summary of what changed here on exit_
 
 ## Evidence
 _Ledger: `~/Development/agent-dispatch/evidence <repo> <task> <state>`._
