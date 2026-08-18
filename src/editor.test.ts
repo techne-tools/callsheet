@@ -68,6 +68,18 @@ describe("htmlToMarkdown", () => {
     const el = root("<p>a</p><p>b</p>");
     expect(htmlToMarkdown(el)).toBe("a\nb");
   });
+
+  it("serializes bare text nodes under the root (empty-card typing)", () => {
+    // Regression: an empty card seeded with "" leaves typed text as a bare
+    // text node under the contentEditable root; it must not be dropped.
+    const el = root("typed text");
+    expect(htmlToMarkdown(el)).toBe("typed text");
+  });
+
+  it("serializes an empty seeded paragraph as empty markdown", () => {
+    const el = root("<p><br></p>");
+    expect(htmlToMarkdown(el)).toBe("");
+  });
 });
 
 describe("applyLineTransform", () => {

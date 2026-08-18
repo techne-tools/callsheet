@@ -46,7 +46,11 @@ export default function Card({
       committedRef.current = false;
       const el = editorRef.current;
       if (el) {
-        el.innerHTML = renderMarkdown(card.markdown);
+        // Empty markdown renders to no blocks; seed a single empty paragraph
+        // so the caret has a block to live in and typed text lands inside a
+        // <p> (htmlToMarkdown only serializes element children).
+        el.innerHTML =
+          card.markdown === "" ? "<p><br></p>" : renderMarkdown(card.markdown);
         const last = el.lastElementChild as HTMLElement | null;
         if (last) {
           const range = document.createRange();

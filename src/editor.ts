@@ -43,20 +43,29 @@ export function lineMarkdown(line: HTMLElement): string {
 /** Serialize the whole editor root to markdown. */
 export function htmlToMarkdown(root: HTMLElement): string {
   const lines: string[] = [];
-  for (const child of Array.from(root.children)) {
-    const tag = child.tagName.toLowerCase();
+  for (const child of Array.from(root.childNodes)) {
+    if (child.nodeType === Node.TEXT_NODE) {
+      // Defensive: contentEditable can leave bare text under the root
+      // (e.g. if a block was removed). Never drop typed content.
+      const text = (child.textContent ?? "").trim();
+      if (text !== "") lines.push(text);
+      continue;
+    }
+    if (child.nodeType !== Node.ELEMENT_NODE) continue;
+    const el = child as HTMLElement;
+    const tag = el.tagName.toLowerCase();
     if (tag === "ul") {
-      for (const li of Array.from(child.children)) {
+      for (const li of Array.from(el.children)) {
         lines.push(`- ${serializeInline(li)}`);
       }
     } else if (tag === "blockquote") {
-      for (const p of Array.from(child.children)) {
+      for (const p of Array.from(el.children)) {
         lines.push(`> ${serializeInline(p)}`);
       }
     } else if (tag === "h1" || tag === "h2" || tag === "h3") {
-      lines.push(`${"#".repeat(Number(tag[1]))} ${serializeInline(child)}`);
+      lines.push(`${"#".repeat(Number(tag[1]))} ${serializeInline(el)}`);
     } else if (tag === "p") {
-      lines.push(serializeInline(child));
+      lines.push(serializeInline(el));
     }
   }
   return lines.join("\n").replace(/\n+$/, "");
