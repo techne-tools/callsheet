@@ -166,6 +166,28 @@ export default function Card({
       const before = content.slice(0, caret);
       const after = content.slice(caret);
       const doc = el.ownerDocument;
+
+      // Splitting inside a list item keeps the list: new <li> in the same <ul>.
+      if (tag === "li") {
+        const newLineLi = doc.createElement("li");
+        newLineLi.innerHTML = parseInlineSafe(before);
+        const newLi = doc.createElement("li");
+        newLi.innerHTML = parseInlineSafe(after);
+        line.replaceWith(newLineLi, newLi);
+        setCaretAtMarkdownOffset(newLi, 0);
+        return;
+      }
+      // Splitting inside a blockquote keeps the quote: new <p> in the same <blockquote>.
+      if (tag === "p" && line.parentElement?.tagName.toLowerCase() === "blockquote") {
+        const newLineP = doc.createElement("p");
+        newLineP.innerHTML = parseInlineSafe(before);
+        const newP = doc.createElement("p");
+        newP.innerHTML = parseInlineSafe(after);
+        line.replaceWith(newLineP, newP);
+        setCaretAtMarkdownOffset(newP, 0);
+        return;
+      }
+
       const newP = doc.createElement("p");
       newP.innerHTML = parseInlineSafe(after);
       const newLine = doc.createElement("p");
@@ -210,7 +232,10 @@ export default function Card({
         const prev = line.previousElementSibling as HTMLElement | null;
         if (prev) {
           const prevMd = lineMarkdown(prev);
-          const merged = el.ownerDocument.createElement("p");
+          // Merging two list items keeps the list: single <li> in the same <ul>.
+          const merged = el.ownerDocument.createElement(
+            tag === "li" && prev.tagName.toLowerCase() === "li" ? "li" : "p",
+          );
           merged.innerHTML = parseInlineSafe(prevMd + content);
           line.replaceWith(merged);
           setCaretAtMarkdownOffset(merged, prevMd.length);
@@ -236,19 +261,23 @@ export default function Card({
     const after = content.slice(caret);
     const lines = text.split(/\r?\n/);
     const doc = line.ownerDocument;
-    const first = doc.createElement("p");
+    // Pasting inside a list keeps the list: new <li>s in the same <ul>.
+    // (Quote lines stay inside their <blockquote> automatically — the new
+    // <p>s are inserted relative to the replaced line, which is inside it.)
+    const inList = tag === "li";
+    const first = doc.createElement(inList ? "li" : "p");
     first.innerHTML = parseInlineSafe(before + lines[0]);
     line.replaceWith(first);
     let prev = first;
     for (let i = 1; i < lines.length; i++) {
-      const p = doc.createElement("p");
+      const p = doc.createElement(inList ? "li" : "p");
       p.innerHTML = parseInlineSafe(lines[i]);
       prev.after(p);
       prev = p;
     }
     // Re-append the remainder of the original line after the pasted block.
     if (after !== "") {
-      const tail = doc.createElement("p");
+      const tail = doc.createElement(inList ? "li" : "p");
       tail.innerHTML = parseInlineSafe(after);
       prev.after(tail);
       prev = tail;
