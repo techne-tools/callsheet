@@ -68,7 +68,7 @@ these items — nothing outside the list.
   most once more, then stop polishing
 - Work only inside this worktree. Do NOT use /tmp paths (sandbox auto-rejects).
 - Impeccable is vendored at `.agents/skills/impeccable/` — use those paths,
-  NEVER `~/.hermes/skills/`.
+  NEVER the global skills directory.
 
 ## Status
 - [ ] In progress
