@@ -18,7 +18,7 @@
 | 4 | Build | opencode | autonomous | bones validated, weirdness fixed, hard bits done | diff vs sketch | ✅ e798c11+98937d0+e859348 2026-08-18 |
 | 5 | Drudge | zero | autonomous | boilerplate, coverage, docs, obvious fills | diff reviewed | ⬜ |
 | 6 | Design review (impeccable critique/audit + Open Design run) | Hermes + OD MCP | autonomous + interactive | numbered fix list, prioritised | fixes triaged with Chris | ⬜ |
-| 7 | Fix pass (impeccable polish / compliance sweep) | opencode | autonomous | fixes applied, detector re-run clean | diff vs fix list | ⬜ |
+| 7 | Fix pass (impeccable polish / compliance sweep) | opencode | autonomous | fixes applied, detector re-run clean | diff vs fix list | ✅ 5945970+3685ad7 2026-08-18 |
 | 8 | Review | Hermes + Chris | interactive | final diff vs whole arc | Chris approves merge | ⬜ |
 
 ## Design lane invariants (all phases)
@@ -42,7 +42,7 @@
   substitute your own write_file for a run's deliverable.
 
 ## Current phase
-**5 — Drudge** (zero, autonomous)
+**8 — Review** (Hermes + Chris, interactive)
 
 ## Handoff log
 - **Phase 0 (opencode):** Recon complete — RECON.md written, TASK.md status updated. Verified by Hermes: all 5 acceptance criteria met; spot-checks confirmed (Cargo.lock untracked, rusqlite absent, no test script). Ledger: verified.
@@ -52,3 +52,6 @@
   - **Lesson (Q22):** impeccable tooling must be installed per-worktree via `npx impeccable install` (detects harnesses, vendors skill into project). Skill-script fallback (symlink) works but its detector runs DEGRADED (no htmlparser2/css-select). Full-strength detector = `npx impeccable detect`.
 - **Phase 4 (opencode):** Build complete. Two parallel lanes (frontend @designer, backend @fixer) against a shared `CONTRACT.md`. Frontend: greet demo replaced with the day board (cards, sidebar, ghost cards, keyboard+clipboard grammar, day nav, markdown, Vitest). Backend: rusqlite + SQLite store, colour allocator (uniqueness invariant), 12 Tauri commands, window presence modes, cargo tests. Verified: `npm run build` PASS, `npm test` PASS (12), `cargo check`+`cargo test` PASS (5). Detector clean except 1 documented advisory (sidebar width transition). DESIGN.md updated with implementation resolutions. Ledger: reported (exit 0, unverified).
   - **Hermes verification (2026-08-18):** All 10 ACs met. Live launch confirmed — `tauri dev` compiled + ran `target/debug/callsheet` (pid 89511, ASN registered in lsappinfo), killed cleanly. SQLite parameterised-only (no format! in SQL), seed HSL tokens exact, allocator uniqueness test passes, greet demo fully removed (no greet/#396cd8 in src/). Detector re-run host-side: 1 advisory only, documented. Ledger: verified.
+- **Phase 5 (Hermes):** Drudge done host-side (zero has two strikes per FLEET — exit 0 unverified). README rewritten from stock template (design contract, dev commands, architecture); unused `@tauri-apps/plugin-opener` dropped from package.json. Commit afdfdd5. Ledger: verified.
+- **Phase 6 (Hermes):** Design review — impeccable critique (heuristics 31/40 Good) + audit (15/20 Good) + detector (1 documented advisory). ⚠️ DEGRADED: delegation provider HTTP 401 → assessments A+B ran inline single-context (banner declared). Open Design MCP run deferred (not in active toolset). DESIGN_REVIEW.md: 9-item numbered P1/P2/P3 fix list, committed 28eb850. Chris triaged: ALL 9 approved. Ledger: reported.
+- **Phase 7 (opencode + Hermes):** Fix pass — 2 commits: 5945970 (pass 1 compliance: HSL tokenised into :root, ghost label contrast), 3685ad7 (pass 2 design: Cmd+Z undo, calmError copy, title+favicon, keyboard hint, dead nav props, safety comments). Item 6 (sidebar width transition) accepted as documented. Gates: build PASS, vitest 12, cargo 5, detector 1 known advisory. Note: original dispatch survived session interruption; duplicate dispatch killed; pass-2 JSX comment placement + await-in-sync-callback fixed host-side. Ledger: verified.
