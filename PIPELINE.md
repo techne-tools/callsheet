@@ -19,7 +19,7 @@
 | 5 | Drudge | zero | autonomous | boilerplate, coverage, docs, obvious fills | diff reviewed | ⬜ |
 | 6 | Design review (impeccable critique/audit + Open Design run) | Hermes + OD MCP | autonomous + interactive | numbered fix list, prioritised | fixes triaged with Chris | ⬜ |
 | 7 | Fix pass (impeccable polish / compliance sweep) | opencode | autonomous | fixes applied, detector re-run clean | diff vs fix list | ✅ 5945970+3685ad7 2026-08-18 |
-| 8 | Review | Hermes + Chris | interactive | final diff vs whole arc | Chris approves merge | ⬜ |
+| 8 | Review | Hermes + Chris | interactive | final diff vs whole arc | Chris approves merge | ✅ 2026-08-18 |
 
 ## Design lane invariants (all phases)
 
@@ -42,7 +42,7 @@
   substitute your own write_file for a run's deliverable.
 
 ## Current phase
-**8 — Review** (Hermes + Chris, interactive)
+**8 — Review** (Hermes + Chris, interactive) — **APPROVED 2026-08-18**
 
 ## Handoff log
 - **Phase 0 (opencode):** Recon complete — RECON.md written, TASK.md status updated. Verified by Hermes: all 5 acceptance criteria met; spot-checks confirmed (Cargo.lock untracked, rusqlite absent, no test script). Ledger: verified.
@@ -56,3 +56,4 @@
 - **Phase 6 (Hermes):** Design review — impeccable critique (heuristics 31/40 Good) + audit (15/20 Good) + detector (1 documented advisory). ⚠️ DEGRADED: delegation provider HTTP 401 → assessments A+B ran inline single-context (banner declared). Open Design MCP run deferred (not in active toolset). DESIGN_REVIEW.md: 9-item numbered P1/P2/P3 fix list, committed 28eb850. Chris triaged: ALL 9 approved. Ledger: reported.
 - **Phase 7 (opencode + Hermes):** Fix pass — 2 commits: 5945970 (pass 1 compliance: HSL tokenised into :root, ghost label contrast), 3685ad7 (pass 2 design: Cmd+Z undo, calmError copy, title+favicon, keyboard hint, dead nav props, safety comments). Item 6 (sidebar width transition) accepted as documented. Gates: build PASS, vitest 12, cargo 5, detector 1 known advisory. Note: original dispatch survived session interruption; duplicate dispatch killed; pass-2 JSX comment placement + await-in-sync-callback fixed host-side. Ledger: verified.
 - **Phase 8 (Hermes + Chris):** Review opened; Chris returned to work with a 4.5h dev session's uncommitted work in the tree (handoff trace 20260818-callsheet-caret-fix). Verified + committed as one commit 23e6006 (split into logical commits attempted, abandoned — hunks interleaved, intermediate states don't compile): inline contentEditable markdown editor (src/editor.ts, 23 tests), pointer-based drag & drop replacing HTML5 DnD (WKWebView unreliability), template CRUD (sidebar + / double-click edit / delete, update_template backend), add-card + button, Backspace/Delete delete, editor owns keyboard while editing. Gates re-verified: build PASS, vitest 40/40, cargo 6/6. Ledger: verified.
+- **Phase 8 follow-up (Hermes + Chris, 2026-08-18):** Editor bug-fix pass during review — 3 commits: 017c7a8 (empty cards uneditable — serializer ignored bare text nodes; seed `<p><br></p>`), 50df0eb (Enter/Backspace/paste inside a list destroyed the list — split created bare `<p>`s; now splits `<li>`→`<li>` in same `<ul>`, paste makes `<li>`s, backspace merge stays `<li>`), e16d832 (exiting a middle list item deleted the items before it — exitList/exitQuote dropped before-items; detach-then-split fix + 3 regression tests). Gates: build PASS, vitest 45/45. Chris approved phase 8 merge 2026-08-18. Nested lists explicitly out of scope (flat lists fine).
