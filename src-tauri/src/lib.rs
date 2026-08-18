@@ -106,6 +106,18 @@ fn delete_template(state: tauri::State<'_, Store>, id: i64) -> Result<(), String
     db::delete_template(&conn, id).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn update_template(
+    state: tauri::State<'_, Store>,
+    id: i64,
+    name: String,
+    markdown: String,
+    activity_type_id: i64,
+) -> Result<Template, String> {
+    let conn = state.0.lock().map_err(|e| e.to_string())?;
+    db::update_template(&conn, id, &name, &markdown, activity_type_id).map_err(|e| e.to_string())
+}
+
 // ---------------------------------------------------------------------------
 // Window presence
 // ---------------------------------------------------------------------------
@@ -188,6 +200,7 @@ pub fn run() {
             list_templates,
             create_template,
             delete_template,
+            update_template,
             set_window_presence,
         ])
         .run(tauri::generate_context!())

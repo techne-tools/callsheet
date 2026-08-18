@@ -311,6 +311,25 @@ pub fn delete_template(conn: &Connection, id: i64) -> Result<()> {
     Ok(())
 }
 
+/// Update a template's name, markdown, and activity type.
+pub fn update_template(
+    conn: &Connection,
+    id: i64,
+    name: &str,
+    markdown: &str,
+    activity_type_id: i64,
+) -> Result<Template> {
+    conn.execute(
+        "UPDATE templates SET name = ?1, markdown = ?2, activity_type_id = ?3 WHERE id = ?4",
+        params![name, markdown, activity_type_id, id],
+    )?;
+    conn.query_row(
+        "SELECT id, name, markdown, activity_type_id FROM templates WHERE id = ?1",
+        params![id],
+        row_to_template,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -417,5 +436,20 @@ mod tests {
         assert_eq!(templates[0].name, "Standup");
         delete_template(&conn, t.id).unwrap();
         assert!(list_templates(&conn).unwrap().is_empty());
+    }
+
+    #[test]
+    fn template_update_changes_fields() {
+        let conn = open_in_memory().unwrap();
+        let types = list_activity_types(&conn).unwrap();
+        let t = create_template(&conn, "Old", "old body", types[0].id).unwrap();
+        let updated = update_template(&conn, t.id, "New", "new body", types[1].id).unwrap();
+        assert_eq!(updated.name, "New");
+        assert_eq!(updated.markdown, "new body");
+        assert_eq!(updated.activity_type_id, types[1].id);
+        // The row is actually persisted, not just returned.
+        let listed = list_templates(&conn).unwrap();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].name, "New");
     }
 }

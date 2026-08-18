@@ -6,7 +6,7 @@
 // tags we control.
 
 /** Escape the HTML-significant characters before any transform. */
-function escapeHtml(s: string): string {
+export function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -21,6 +21,15 @@ function inline(md: string): string {
   s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   s = s.replace(/(^|[^*])\*([^*\s][^*]*)\*(?!\*)/g, "$1<em>$2</em>");
   return s;
+}
+
+/**
+ * Render the inline content of a single line (no block wrapper). Used by the
+ * live editor to re-render a block's inner HTML as the user types. The input
+ * is escaped first, so the output is safe to set as innerHTML.
+ */
+export function parseInline(md: string): string {
+  return inline(escapeHtml(md));
 }
 
 /** Render the markdown subset to safe HTML. */
@@ -108,4 +117,10 @@ export function markdownToPlainText(md: string): string {
     .replace(/\*([^*]+)\*/g, "$1")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+/** A short template name derived from the card's first line. */
+export function templateNameFromMarkdown(md: string): string {
+  const first = markdownToPlainText(md).split("\n")[0]?.trim() || "";
+  return first.slice(0, 40) || "Untitled";
 }

@@ -108,6 +108,14 @@ export const createTemplate = (
 export const deleteTemplate = (id: number): Promise<void> =>
   invoke<void>("delete_template", { id });
 
+export const updateTemplate = (
+  id: number,
+  name: string,
+  markdown: string,
+  activityTypeId: number,
+): Promise<Template> =>
+  invoke<Template>("update_template", { id, name, markdown, activityTypeId });
+
 // ---------------------------------------------------------------------------
 // Window presence
 // ---------------------------------------------------------------------------

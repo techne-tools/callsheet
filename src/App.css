@@ -157,6 +157,27 @@ body {
   color: var(--ink);
 }
 
+.day-header__add {
+  appearance: none;
+  border: 1px solid var(--hairline);
+  background: transparent;
+  color: var(--ink-secondary);
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 120ms var(--ease-out), border-color 120ms var(--ease-out);
+}
+.day-header__add:hover {
+  color: var(--ink);
+  border-color: var(--hover-border);
+}
+
 /* ---------------------------------------------------------------------------
    Card column
    ------------------------------------------------------------------------- */
@@ -171,11 +192,43 @@ body {
 }
 
 .card-stack {
-  width: 100%;
-  max-width: var(--column-width);
   display: flex;
   flex-direction: column;
   gap: var(--card-gap);
+  max-width: var(--column-width);
+  width: 100%;
+}
+
+.card-slot {
+  position: relative;
+}
+
+.drop-indicator {
+  height: 2px;
+  border-radius: var(--card-radius);
+  background: var(--accent-focus);
+  margin: calc(var(--card-gap) / -2) 0;
+  position: relative;
+  z-index: 1;
+}
+
+/* Floating ghost while pointer-dragging a card or template */
+.drag-ghost {
+  position: fixed;
+  z-index: 1000;
+  pointer-events: none;
+  max-width: 240px;
+  padding: 6px 10px;
+  border-radius: var(--card-radius);
+  background: var(--paper);
+  border: 1px solid var(--hover-border);
+  box-shadow: 0 4px 12px var(--ghost-border);
+  font-size: 12px;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.9;
 }
 
 .empty-day {
@@ -260,6 +313,46 @@ body {
   min-height: 1.4em;
 }
 
+/* Hover actions: save-as-template + delete (quiet until you look) */
+.card__actions {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 120ms var(--ease-out);
+}
+.card:hover .card__actions,
+.card--selected .card__actions,
+.card:focus-within .card__actions {
+  opacity: 1;
+}
+.card__action {
+  appearance: none;
+  border: 1px solid var(--hairline);
+  background: var(--paper);
+  color: var(--ink-secondary);
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 120ms var(--ease-out), border-color 120ms var(--ease-out);
+}
+.card__action:hover {
+  color: var(--ink);
+  border-color: var(--hover-border);
+}
+.card__action--delete:hover {
+  color: var(--ink);
+  border-color: var(--hover-border);
+}
+
 /* Markdown rendering */
 .card__body h1,
 .card__body h2,
@@ -300,24 +393,26 @@ body {
   color: var(--ink-secondary);
 }
 
-/* Edit textarea */
-.card__edit {
-  width: 100%;
-  min-height: 1.4em;
-  resize: vertical;
-  border: none;
-  background: transparent;
-  font-family: inherit;
-  font-size: inherit;
-  line-height: inherit;
-  color: inherit;
-  padding: 0;
-  margin: 0;
+/* Inline editor (contentEditable) — the rendered markdown IS the edit
+   surface. Same typography as display mode; a soft focus ring marks the
+   editing card without shouting. */
+.card__editor {
   outline: none;
   caret-color: var(--accent-caret);
+  min-height: 1.4em;
 }
-.card__edit::selection {
+.card__editor::selection {
   background: var(--accent-focus-soft);
+}
+.card__editor:focus {
+  outline: 1px solid var(--accent-focus);
+  outline-offset: 3px;
+  border-radius: var(--card-radius);
+}
+/* Empty editor keeps a quiet placeholder line height. */
+.card__editor:empty::before {
+  content: "";
+  display: inline-block;
 }
 
 /* ---------------------------------------------------------------------------
@@ -388,6 +483,13 @@ body {
   white-space: nowrap;
 }
 
+.sidebar__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sidebar__add,
 .sidebar__toggle {
   appearance: none;
   border: 1px solid var(--hairline);
@@ -405,6 +507,7 @@ body {
   flex: none;
   transition: color 120ms var(--ease-out), border-color 120ms var(--ease-out);
 }
+.sidebar__add:hover,
 .sidebar__toggle:hover {
   color: var(--ink);
   border-color: var(--hover-border);
@@ -439,6 +542,10 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   transition: border-color 120ms var(--ease-out);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
 }
 .template:hover {
   border-color: var(--hover-border);
@@ -448,6 +555,130 @@ body {
 }
 .template--dragging {
   opacity: 0.4;
+}
+.template__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.template__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+  border: 1px solid var(--hairline);
+}
+.template__delete {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--ink-secondary);
+  width: 16px;
+  height: 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 120ms var(--ease-out), color 120ms var(--ease-out);
+}
+.template:hover .template__delete {
+  opacity: 1;
+}
+.template__delete:hover {
+  color: var(--ink);
+}
+
+/* Template edit mode (double-click a template) */
+.template--editing {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  cursor: default;
+  white-space: normal;
+  padding: 10px;
+}
+.template__input,
+.template__textarea {
+  appearance: none;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  padding: 5px 8px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.template__input:focus,
+.template__textarea:focus {
+  outline: 2px solid var(--accent-focus);
+  outline-offset: -1px;
+}
+.template__textarea {
+  resize: none; /* no native handle — clashes with the quiet surface */
+  min-height: 56px;
+  line-height: 1.4;
+}
+.template__edit-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.template__edit-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: flex-end;
+}
+.template__select {
+  appearance: none;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 8px;
+  flex: 1;
+  min-width: 0;
+  max-width: 100%;
+}
+.template__save,
+.template__cancel {
+  appearance: none;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 10px;
+  cursor: pointer;
+  flex: none;
+  transition: color 120ms var(--ease-out), border-color 120ms var(--ease-out),
+    background 120ms var(--ease-out);
+}
+.template__save {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
+}
+.template__save:hover {
+  background: var(--ink-secondary);
+  border-color: var(--ink-secondary);
+}
+.template__cancel {
+  background: transparent;
+  color: var(--ink-secondary);
+}
+.template__cancel:hover {
+  color: var(--ink);
+  border-color: var(--hover-border);
 }
 
 /* ---------------------------------------------------------------------------

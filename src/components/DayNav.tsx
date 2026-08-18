@@ -2,6 +2,7 @@ interface DayNavProps {
   date: Date;
   onPrev: () => void;
   onNext: () => void;
+  onAdd: () => void;
 }
 
 function formatDate(d: Date): string {
@@ -17,6 +18,7 @@ export default function DayNav({
   date,
   onPrev,
   onNext,
+  onAdd,
 }: DayNavProps) {
   return (
     <header className="day-header">
@@ -38,6 +40,15 @@ export default function DayNav({
         title="Next day (Cmd+Right)"
       >
         ›
+      </button>
+      <button
+        type="button"
+        className="day-header__add"
+        onClick={onAdd}
+        aria-label="Add card"
+        title="Add card"
+      >
+        +
       </button>
     </header>
   );

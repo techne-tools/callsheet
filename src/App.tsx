@@ -7,9 +7,12 @@ import {
   commitGhostCard,
   listActivityTypes,
   listTemplates,
+  createTemplate,
+  deleteTemplate,
+  updateTemplate,
   deriveBorder,
 } from "./tauri";
-import { markdownToPlainText } from "./markdown";
+import { markdownToPlainText, templateNameFromMarkdown } from "./markdown";
 import CardView from "./components/Card";
 import GhostCard from "./components/GhostCard";
 import Sidebar from "./components/Sidebar";
@@ -56,7 +59,6 @@ export default function App() {
 
   const dateKey = toISODate(date);
   const dayPaneRef = useRef<HTMLDivElement>(null);
-  const dragIndexRef = useRef<number | null>(null);
 
   // Load activity types + templates once on mount.
   useEffect(() => {
@@ -193,6 +195,80 @@ export default function App() {
     [],
   );
 
+  // --- Add / template management ------------------------------------------
+
+  const addCard = useCallback(async () => {
+    const typeId =
+      (selectedId != null
+        ? cards.find((c) => c.id === selectedId)?.activityTypeId
+        : undefined) ?? activityTypes[0]?.id;
+    if (typeId == null) return;
+    try {
+      const saved = await saveCard({
+        id: 0,
+        date: dateKey,
+        activityTypeId: typeId,
+        position: cards.length,
+        markdown: "",
+        isGhost: false,
+      });
+      setCards((prev) => [...prev, saved]);
+      setSelectedId(saved.id);
+      setEditingId(saved.id);
+    } catch (e) {
+      setError(calmError(e, "save"));
+    }
+  }, [cards, selectedId, activityTypes, dateKey]);
+
+  const saveAsTemplate = useCallback(
+    async (card: Card, markdown: string) => {
+      try {
+        const tpl = await createTemplate(
+          templateNameFromMarkdown(markdown),
+          markdown,
+          card.activityTypeId,
+        );
+        setTemplates((prev) => [...prev, tpl]);
+      } catch (e) {
+        setError(calmError(e, "save"));
+      }
+    },
+    [],
+  );
+
+  const removeTemplate = useCallback(async (id: number) => {
+    try {
+      await deleteTemplate(id);
+      setTemplates((prev) => prev.filter((t) => t.id !== id));
+    } catch (e) {
+      setError(calmError(e, "delete"));
+    }
+  }, []);
+
+  const saveTemplateEdit = useCallback(
+    async (id: number, name: string, markdown: string, activityTypeId: number) => {
+      try {
+        const updated = await updateTemplate(id, name, markdown, activityTypeId);
+        setTemplates((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+      } catch (e) {
+        setError(calmError(e, "save"));
+      }
+    },
+    [],
+  );
+
+  // Sidebar "+": add a new empty template (edit it via double-click).
+  const addEmptyTemplate = useCallback(async () => {
+    const typeId = activityTypes[0]?.id;
+    if (typeId == null) return;
+    try {
+      const tpl = await createTemplate("Untitled", "", typeId);
+      setTemplates((prev) => [...prev, tpl]);
+    } catch (e) {
+      setError(calmError(e, "save"));
+    }
+  }, [activityTypes]);
+
   // --- Clipboard -----------------------------------------------------------
 
   const copySelected = useCallback(async () => {
@@ -243,6 +319,11 @@ export default function App() {
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;
+
+      // While a card is being edited inline, the editor owns the keyboard
+      // (Enter/Backspace/Tab/Delete are content operations). Only Cmd-based
+      // shortcuts still apply.
+      if (editingId != null && !mod) return;
 
       // Day nav: Cmd+Left / Cmd+Right
       if (mod && e.key === "ArrowLeft") {
@@ -296,6 +377,16 @@ export default function App() {
         return;
       }
 
+      // Delete selected card: Backspace or Delete (not while editing)
+      if (!mod && (e.key === "Backspace" || e.key === "Delete")) {
+        if (editingId != null) return; // let the textarea handle it
+        if (selectedId == null) return;
+        e.preventDefault();
+        const card = cards.find((c) => c.id === selectedId);
+        if (card) void handleDelete(card);
+        return;
+      }
+
       // Shift order: Cmd+Shift+Up / Down
       if (mod && e.shiftKey && e.key === "ArrowUp") {
         e.preventDefault();
@@ -342,86 +433,145 @@ export default function App() {
       lastDeleted,
       loadCards,
       dateKey,
+      handleDelete,
+      cards,
     ],
   );
 
-  // --- Drag & drop ---------------------------------------------------------
+  // --- Pointer drag (WKWebView does not fire HTML5 drag events reliably) ----
+  // HTML5 DnD (draggable + dragstart/dragover/drop) is unreliable in Tauri's
+  // WKWebView: drag events never fire, so drops fail silently. We implement
+  // dragging with plain mouse events instead: mousedown arms a drag, a small
+  // movement threshold activates it, mousemove updates the ghost + drop
+  // indicator, mouseup resolves the drop.
 
-  const handleCardDragStart = useCallback(
-    (e: React.DragEvent, card: Card) => {
-      dragIndexRef.current = cards.findIndex((c) => c.id === card.id);
-      e.dataTransfer.effectAllowed = "move";
-      e.dataTransfer.setData("text/plain", String(card.id));
-    },
-    [cards],
-  );
+  const dragRef = useRef<{
+    kind: "card" | "template";
+    id: number;
+    startX: number;
+    startY: number;
+    active: boolean;
+  } | null>(null);
+  const [dragPos, setDragPos] = useState<{ x: number; y: number } | null>(null);
+  const [dropIndex, setDropIndex] = useState<number | null>(null);
 
-  const handleTemplateDragStart = useCallback(
-    (e: React.DragEvent, template: Template) => {
-      dragIndexRef.current = null;
-      e.dataTransfer.effectAllowed = "copy";
-      e.dataTransfer.setData("application/x-callsheet-template", String(template.id));
+  const DRAG_THRESHOLD = 4; // px of movement before a drag begins
+
+  const beginDrag = useCallback(
+    (kind: "card" | "template", id: number, e: React.MouseEvent) => {
+      e.preventDefault(); // stop text selection while dragging
+      dragRef.current = { kind, id, startX: e.clientX, startY: e.clientY, active: false };
     },
     [],
   );
 
-  const handleDrop = useCallback(
-    async (e: React.DragEvent) => {
-      e.preventDefault();
-      dayPaneRef.current?.classList.remove("day-pane--over");
-
-      const templateId = e.dataTransfer.getData("application/x-callsheet-template");
-      if (templateId) {
-        const tpl = templates.find((t) => t.id === Number(templateId));
-        if (tpl) {
-          try {
-            await saveCard({
-              id: 0,
-              date: dateKey,
-              activityTypeId: tpl.activityTypeId,
-              position: cards.length,
-              markdown: tpl.markdown,
-              isGhost: false,
-            });
-            await loadCards(dateKey);
-          } catch (err) {
-            setError(calmError(err, "save"));
-          }
-        }
-        return;
-      }
-
-      // Card reorder
-      const from = dragIndexRef.current;
-      if (from == null) return;
-      const to = computeDropIndex(e);
-      dragIndexRef.current = null;
-      if (to != null && to !== from) reorder(from, to);
-    },
-    [templates, dateKey, cards, loadCards, reorder],
-  );
-
-  const computeDropIndex = (e: React.DragEvent): number | null => {
-    const col = e.currentTarget as HTMLElement;
+  const computeDropIndexAt = useCallback((y: number): number | null => {
+    const col = dayPaneRef.current?.querySelector(".card-stack");
+    if (!col) return null;
     const items = Array.from(col.querySelectorAll<HTMLElement>("[data-card-id]"));
     if (items.length === 0) return 0;
-    const y = e.clientY;
     for (let i = 0; i < items.length; i++) {
       const rect = items[i].getBoundingClientRect();
       if (y < rect.top + rect.height / 2) return i;
     }
     return items.length;
-  };
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    dayPaneRef.current?.classList.add("day-pane--over");
   }, []);
 
-  const handleDragLeave = useCallback(() => {
-    dayPaneRef.current?.classList.remove("day-pane--over");
-  }, []);
+  // Latest data for the window-level drag handlers (avoids stale closures).
+  const cardsRef = useRef(cards);
+  cardsRef.current = cards;
+  const templatesRef = useRef(templates);
+  templatesRef.current = templates;
+  const dateKeyRef = useRef(dateKey);
+  dateKeyRef.current = dateKey;
+  const loadCardsRef = useRef(loadCards);
+  loadCardsRef.current = loadCards;
+  const reorderRef = useRef(reorder);
+  reorderRef.current = reorder;
+  const saveAsTemplateRef = useRef(saveAsTemplate);
+  saveAsTemplateRef.current = saveAsTemplate;
+
+  // Window-level mousemove/mouseup drive the drag once armed.
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      const d = dragRef.current;
+      if (!d) return;
+      if (!d.active) {
+        if (Math.hypot(e.clientX - d.startX, e.clientY - d.startY) < DRAG_THRESHOLD) return;
+        d.active = true;
+      }
+      setDragPos({ x: e.clientX, y: e.clientY });
+      if (d.kind === "card") {
+        setDropIndex(computeDropIndexAt(e.clientY));
+      }
+    };
+    const onUp = (e: MouseEvent) => {
+      const d = dragRef.current;
+      dragRef.current = null;
+      setDragPos(null);
+      setDropIndex(null);
+      if (!d || !d.active) return;
+
+      const under = document.elementFromPoint(e.clientX, e.clientY);
+      const inDayPane = !!under?.closest(".day-pane");
+      const inSidebar = !!under?.closest(".sidebar, .sidebar-rail");
+
+      if (d.kind === "template") {
+        if (inDayPane) {
+          const tpl = templatesRef.current.find((t) => t.id === d.id);
+          if (tpl) {
+            void (async () => {
+              try {
+                await saveCard({
+                  id: 0,
+                  date: dateKeyRef.current,
+                  activityTypeId: tpl.activityTypeId,
+                  position: cardsRef.current.length,
+                  markdown: tpl.markdown,
+                  isGhost: false,
+                });
+                await loadCardsRef.current(dateKeyRef.current);
+              } catch (err) {
+                setError(calmError(err, "save"));
+              }
+            })();
+          }
+        }
+        return;
+      }
+
+      // Card drag: sidebar → save as template; day pane → reorder.
+      if (inSidebar) {
+        const card = cardsRef.current.find((c) => c.id === d.id);
+        if (card) void saveAsTemplateRef.current(card, card.markdown);
+        return;
+      }
+      if (inDayPane) {
+        const from = cardsRef.current.findIndex((c) => c.id === d.id);
+        const to = computeDropIndexAt(e.clientY);
+        if (from >= 0 && to != null && to !== from) reorderRef.current(from, to);
+      }
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [computeDropIndexAt]);
+
+  // The dragged card/template content for the floating ghost.
+  const dragGhost = useMemo(() => {
+    if (!dragPos) return null;
+    const d = dragRef.current;
+    if (!d) return null;
+    if (d.kind === "card") {
+      const card = cards.find((c) => c.id === d.id);
+      return card ? { x: dragPos.x, y: dragPos.y, text: markdownToPlainText(card.markdown) } : null;
+    }
+    const tpl = templates.find((t) => t.id === d.id);
+    return tpl ? { x: dragPos.x, y: dragPos.y, text: tpl.name } : null;
+  }, [dragPos, cards, templates]);
 
   // --- Render --------------------------------------------------------------
 
@@ -429,24 +579,28 @@ export default function App() {
     <div className="app">
       <Sidebar
         templates={templates}
+        activityTypes={activityTypes}
         collapsed={sidebarCollapsed}
         onToggle={() => setSidebarCollapsed((v) => !v)}
-        onTemplateDragStart={handleTemplateDragStart}
+        onTemplateDragStart={(e, t) => beginDrag("template", t.id, e)}
+        onDeleteTemplate={(id) => void removeTemplate(id)}
+        onAddTemplate={() => void addEmptyTemplate()}
+        onUpdateTemplate={(id, name, md, typeId) =>
+          void saveTemplateEdit(id, name, md, typeId)
+        }
       />
 
       <div
         className="day-pane"
         ref={dayPaneRef}
         onKeyDown={handleKeyDown}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
         tabIndex={-1}
       >
         <DayNav
           date={date}
           onPrev={() => setDate((d) => addDays(d, -1))}
           onNext={() => setDate((d) => addDays(d, 1))}
+          onAdd={() => void addCard()}
         />
 
         <div className="card-column">
@@ -460,30 +614,38 @@ export default function App() {
             <div className="empty-day">
               A quiet day. No cards yet.
               <div className="empty-day__hint">
-                Tab to move between cards · Cmd+Shift+↑↓ to reorder
+                Add a card with the + button, or Cmd+V to paste · Tab to move
+                between cards
               </div>
             </div>
           )}
 
           {!error && cards.length > 0 && (
             <div className="card-stack" role="list">
-              {cards.map((card) => (
-                <CardView
-                  key={card.id}
-                  card={card}
-                  fill={fillFor(card)}
-                  border={borderFor(card)}
-                  selected={card.id === selectedId}
-                  editing={card.id === editingId}
-                  onSelect={() => setSelectedId(card.id)}
-                  onEdit={() =>
-                    setEditingId((cur) => (cur === card.id ? null : card.id))
-                  }
-                  onSave={(md) => void saveMarkdown(card, md)}
-                  onDelete={() => void handleDelete(card)}
-                  onGrabStart={(e) => handleCardDragStart(e, card)}
-                />
+              {cards.map((card, i) => (
+                <div key={card.id} className="card-slot">
+                  {dropIndex === i && (
+                    <div className="drop-indicator" aria-hidden="true" />
+                  )}
+                  <CardView
+                    card={card}
+                    fill={fillFor(card)}
+                    border={borderFor(card)}
+                    selected={card.id === selectedId}
+                    editing={card.id === editingId}
+                    onSelect={() => setSelectedId(card.id)}
+                    onEdit={() =>
+                      setEditingId((cur) => (cur === card.id ? null : card.id))
+                    }
+                    onSave={(md) => void saveMarkdown(card, md)}
+                    onDelete={() => void handleDelete(card)}
+                    onGrabStart={(e) => beginDrag("card", card.id, e)}
+                  />
+                </div>
               ))}
+              {dropIndex === cards.length && (
+                <div className="drop-indicator" aria-hidden="true" />
+              )}
 
               {cards
                 .filter((c) => c.isGhost)
@@ -494,6 +656,16 @@ export default function App() {
           )}
         </div>
       </div>
+
+      {dragGhost && (
+        <div
+          className="drag-ghost"
+          style={{ left: dragGhost.x + 12, top: dragGhost.y + 12 }}
+          aria-hidden="true"
+        >
+          {dragGhost.text}
+        </div>
+      )}
     </div>
   );
 }
