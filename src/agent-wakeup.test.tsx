@@ -132,3 +132,62 @@ describe("agent wake-up (Phase B)", () => {
     act(() => root.unmount());
   });
 });
+
+describe("idle day advance (Phase B.2)", () => {
+  function todayISO(): string {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+      d.getDate(),
+    ).padStart(2, "0")}`;
+  }
+
+  function goToPreviousDay() {
+    act(() => {
+      document.querySelector('[aria-label="Previous day"]')?.dispatchEvent(
+        new MouseEvent("click", { bubbles: true }),
+      );
+    });
+  }
+
+  it("advances to today after 15+ minutes idle on a different day", async () => {
+    vi.useFakeTimers();
+    const root = renderApp();
+    await act(async () => {});
+
+    goToPreviousDay();
+    await act(async () => {});
+
+    // No interaction since mount; after 16 minutes the board should move
+    // back to the current day (the 30s poll alone would keep yesterday).
+    await act(async () => {
+      vi.advanceTimersByTime(16 * 60_000);
+    });
+
+    const dates = mocks.listCards.mock.calls.map((c) => c[0]);
+    expect(dates).toContain(todayISO());
+    act(() => root.unmount());
+  });
+
+  it("does not advance while the user is actively working", async () => {
+    vi.useFakeTimers();
+    const root = renderApp();
+    await act(async () => {});
+
+    goToPreviousDay();
+    await act(async () => {});
+
+    // A recent interaction resets the idle clock — 10 minutes later the
+    // board must still be on yesterday (the last load is still yesterday).
+    act(() => {
+      window.dispatchEvent(new Event("pointerdown"));
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(10 * 60_000);
+    });
+
+    const calls = mocks.listCards.mock.calls;
+    const lastDate = calls[calls.length - 1]?.[0];
+    expect(lastDate).not.toBe(todayISO());
+    act(() => root.unmount());
+  });
+});

@@ -66,6 +66,7 @@ export default function App() {
   const dateKey = toISODate(date);
   const dayPaneRef = useRef<HTMLDivElement>(null);
   const requestedKeyRef = useRef<string>("");
+  const lastInteractionRef = useRef<number>(Date.now());
 
   // Load activity types + templates once on mount.
   useEffect(() => {
@@ -131,6 +132,36 @@ export default function App() {
     }, 30_000);
     return () => window.clearInterval(id);
   }, [loadCards]);
+
+  // Track the last user interaction so the day can advance only when the
+  // board is idle — never while someone is working on a day.
+  useEffect(() => {
+    const mark = () => {
+      lastInteractionRef.current = Date.now();
+    };
+    window.addEventListener("pointerdown", mark);
+    window.addEventListener("keydown", mark);
+    return () => {
+      window.removeEventListener("pointerdown", mark);
+      window.removeEventListener("keydown", mark);
+    };
+  }, []);
+
+  // Advance to the current day when the board is idle: at midnight, or after
+  // 15 minutes without interaction while the window is visible. Quiet — the
+  // date just moves; no toast, no flash. Cmd+T still jumps back manually.
+  useEffect(() => {
+    const advanceIfIdle = () => {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - lastInteractionRef.current < 15 * 60_000) return;
+      setDate((d) => {
+        const today = new Date();
+        return toISODate(d) === toISODate(today) ? d : today;
+      });
+    };
+    const id = window.setInterval(advanceIfIdle, 60_000);
+    return () => window.clearInterval(id);
+  }, []);
 
   const typeById = useMemo(() => {
     const m = new Map<number, ActivityType>();
@@ -347,7 +378,7 @@ export default function App() {
     const typeId = activityTypes[0]?.id;
     if (typeId == null) return;
     try {
-      await proposeGhostCard(dateKey, typeId, "A quiet suggestion for this day.", "manual");
+      await proposeGhostCard(dateKey, typeId, "**A quiet** suggestion.", "manual");
       await loadCards(dateKey);
     } catch (e) {
       setError(calmError(e, "save"));

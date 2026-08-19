@@ -4,7 +4,25 @@ All notable changes to callsheet are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.1] — 2026-08-19
+
+### Added
+
+- Idle day advance — the board quietly moves to the current day at midnight,
+  or after 15 minutes without interaction while the window is visible
+  (presence, not pressure: no toast, no flash; Cmd+T still jumps manually)
+
+### Fixed
+
+- Activity type delete buttons were invisible — the hover-reveal CSS only
+  targeted template pills, never the type rows; the × now appears on hover
+- Template pills squashed vertically as the list filled — `flex: none` pins
+  their height so the sidebar scrolls at a predictable boundary instead
+
+### Changed
+
+- Ghost card proposals are terse and markdown-styled (a few words, bold verb)
+  — the manual demo and the `callsheet-agent` skill quality bar now agree
 
 ## [0.2.0] — 2026-08-18
 
@@ -23,7 +41,7 @@ menu-bar presence fix and a visual pass.
 - 30s fallback poll (visible window only) so direct agent writes are picked
   up even if the event is missed
 - Ghost card dismiss button (×) — quiet red hover, mirrors card delete
-- `~/.hermes/scripts/callsheet-propose.py` — stdlib-only CLI for the agent
+- `callsheet-propose` CLI — stdlib-only script for the agent
   write path (`list` / `propose` / `dismiss`, WAL-safe, parameterized SQL)
 - `callsheet-agent` skill + daily 07:00 cron job (deliver=local — visible
   not sent)
@@ -62,5 +80,6 @@ research, making, teaching, body, and admin — presence, not pressure.
 - Local-first SQLite persistence — no accounts, no sync, no cloud
 - Custom activity types with auto-assigned unique colours
 
+[0.2.1]: https://github.com/prismatic7/callsheet/releases/tag/v0.2.1
 [0.2.0]: https://github.com/prismatic7/callsheet/releases/tag/v0.2.0
 [0.1.0]: https://github.com/prismatic7/callsheet/releases/tag/v0.1.0

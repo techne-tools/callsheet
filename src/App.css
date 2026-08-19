@@ -779,6 +779,7 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex: none; /* pills keep their height; the list scrolls instead of squashing */
   transition: border-color 120ms var(--ease-out), box-shadow 120ms var(--ease-out),
     transform 120ms var(--ease-out);
   display: flex;
@@ -961,6 +962,9 @@ body {
 }
 .sidebar__type:hover {
   background: var(--rail-hover);
+}
+.sidebar__type:hover .template__delete {
+  opacity: 1;
 }
 .sidebar__type-name {
   flex: 1;
