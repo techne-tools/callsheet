@@ -223,17 +223,15 @@ export default function Sidebar({
                 aria-hidden="true"
               />
               <span className="sidebar__type-name">{t.name}</span>
-              {!t.isSeed && (
-                <button
-                  type="button"
-                  className="template__delete"
-                  onClick={() => onDeleteActivityType(t.id)}
-                  title="Delete activity type"
-                  aria-label={`Delete activity type ${t.name}`}
-                >
-                  ×
-                </button>
-              )}
+              <button
+                type="button"
+                className="template__delete"
+                onClick={() => onDeleteActivityType(t.id)}
+                title="Delete activity type"
+                aria-label={`Delete activity type ${t.name}`}
+              >
+                ×
+              </button>
             </div>
           ))}
         </div>

@@ -323,21 +323,11 @@ pub fn create_activity_type(conn: &Connection, name: &str) -> Result<ActivityTyp
 
 /// Delete an activity type by id.
 ///
-/// Seed types (the five core grammar colours) cannot be deleted — they are
-/// the design contract. Types still referenced by cards or templates are
-/// refused with a clear error (the FK constraint would otherwise fail with
-/// a raw SQLite message).
+/// Any type can be deleted — seed types are just the initial palette, not a
+/// protected class. Types still referenced by cards or templates are refused
+/// with a clear error (the FK constraint would otherwise fail with a raw
+/// SQLite message).
 pub fn delete_activity_type(conn: &Connection, id: i64) -> Result<(), String> {
-    let is_seed: i64 = conn
-        .query_row(
-            "SELECT is_seed FROM activity_types WHERE id = ?1",
-            params![id],
-            |row| row.get(0),
-        )
-        .map_err(|e| e.to_string())?;
-    if is_seed != 0 {
-        return Err("seed activity types cannot be deleted".to_string());
-    }
     let in_use: i64 = conn
         .query_row(
             "SELECT (SELECT COUNT(*) FROM cards WHERE activity_type_id = ?1)
@@ -683,13 +673,20 @@ mod tests {
     }
 
     #[test]
-    fn delete_activity_type_guards_seed_and_in_use() {
+    fn delete_activity_type_guards_in_use() {
         let conn = open_in_memory().unwrap();
         let types = list_activity_types(&conn).unwrap();
         let seed = types.iter().find(|t| t.is_seed).unwrap();
 
-        // Seed types cannot be deleted.
-        assert!(delete_activity_type(&conn, seed.id).is_err());
+        // An unused seed type can be deleted — seeds are the initial palette,
+        // not a protected class.
+        delete_activity_type(&conn, seed.id).unwrap();
+        assert!(
+            list_activity_types(&conn)
+                .unwrap()
+                .iter()
+                .all(|t| t.id != seed.id)
+        );
 
         // A custom type in use by a card cannot be deleted.
         let custom = create_activity_type(&conn, "Custom").unwrap();

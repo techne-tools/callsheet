@@ -381,6 +381,38 @@ body {
   opacity: 0.7;
 }
 
+/* Transient error banner: quiet neutral text with a dismiss ×. Auto-clears
+   after 6s; the × is the manual escape hatch. */
+.error-banner {
+  position: relative;
+  color: var(--ink-secondary);
+  padding-right: 40px;
+}
+
+.error-banner__dismiss {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: var(--ink-secondary);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: color 120ms var(--ease-out), border-color 120ms var(--ease-out);
+}
+
+.error-banner__dismiss:hover {
+  color: var(--ink);
+  border-color: var(--ghost-border);
+}
+
 /* ---------------------------------------------------------------------------
    Activity Card
    ------------------------------------------------------------------------- */
@@ -815,7 +847,7 @@ body {
 }
 .template__delete {
   appearance: none;
-  border: none;
+  border: 1px solid transparent;
   background: transparent;
   color: var(--ink-secondary);
   width: 16px;
@@ -829,13 +861,18 @@ body {
   align-items: center;
   justify-content: center;
   opacity: 0;
-  transition: opacity 120ms var(--ease-out), color 120ms var(--ease-out);
+  transition: opacity 120ms var(--ease-out), color 120ms var(--ease-out),
+    border-color 120ms var(--ease-out);
 }
-.template:hover .template__delete {
+.template:hover .template__delete,
+.sidebar__type:hover .template__delete {
   opacity: 1;
 }
+/* Destructive signal: same quiet red as the card delete (design review
+   item 8) — every delete button shares one hover language. */
 .template__delete:hover {
-  color: var(--ink);
+  color: hsl(0, 60%, 40%);
+  border-color: hsl(0, 60%, 70%);
 }
 
 /* Template edit mode (double-click a template) */

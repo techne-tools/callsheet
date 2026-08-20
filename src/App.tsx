@@ -45,6 +45,12 @@ function calmError(e: unknown, context: string): string {
       return "Couldn't save this card. It's still here — try again.";
     case "delete":
       return "Couldn't delete that card. Try again.";
+    case "delete-type":
+      // Surface the backend's reason (e.g. "activity type is in use by
+      // cards or templates") — Tauri rejects with the message string.
+      return typeof e === "string" && e.length > 0
+        ? e
+        : "Couldn't delete that activity type. Try again.";
     case "load":
       return "Couldn't load this day. Try again.";
     default:
@@ -347,12 +353,22 @@ export default function App() {
     }
   }, []);
 
+  const dismissError = useCallback(() => setError(null), []);
+
+  // Auto-clear transient errors after 6s so a stale message can't linger
+  // over the day's cards. Manual dismiss is also available.
+  useEffect(() => {
+    if (error == null) return;
+    const t = setTimeout(dismissError, 6000);
+    return () => clearTimeout(t);
+  }, [error, dismissError]);
+
   const removeActivityType = useCallback(async (id: number) => {
     try {
       await deleteActivityType(id);
       setActivityTypes((prev) => prev.filter((t) => t.id !== id));
     } catch (e) {
-      setError(calmError(e, "delete"));
+      setError(calmError(e, "delete-type"));
     }
   }, []);
 
@@ -769,8 +785,17 @@ export default function App() {
 
         <div className="card-column">
           {error && (
-            <div className="empty-day" role="alert">
-              {error}
+            <div className="empty-day error-banner" role="alert">
+              <span className="error-banner__text">{error}</span>
+              <button
+                type="button"
+                className="error-banner__dismiss"
+                onClick={dismissError}
+                aria-label="Dismiss error"
+                title="Dismiss"
+              >
+                ×
+              </button>
             </div>
           )}
 

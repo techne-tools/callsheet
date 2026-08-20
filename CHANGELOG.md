@@ -4,6 +4,19 @@ All notable changes to callsheet are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] — 2026-08-20
+
+### Changed
+
+- Seed activity types are no longer protected — any activity type can be
+  deleted (types still in use by cards or templates are refused, as before).
+  The five seeds are the initial palette, not a permanent contract.
+
+### Fixed
+
+- Error messages in the card column could not be dismissed — the banner now
+  auto-clears after 6 seconds and carries a quiet × for manual dismissal.
+
 ## [0.2.1] — 2026-08-19
 
 ### Added
