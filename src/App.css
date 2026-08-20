@@ -381,12 +381,43 @@ body {
   opacity: 0.7;
 }
 
-/* Transient error banner: quiet neutral text with a dismiss ×. Auto-clears
-   after 6s; the × is the manual escape hatch. */
+/* Quiet error notice: a small strip anchored to the top of the card column,
+   sitting above the day's cards rather than replacing them. Transient (save/
+   load) failures auto-clear after 6s; sticky (delete / delete-type) failures
+   carry a red hairline + dot so the eye can tell "something needs you" from
+   "a hiccup, moving on" — and stay until dismissed. Never a hero block. */
 .error-banner {
+  max-width: var(--column-width);
+  width: 100%;
   position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 40px 10px 12px;
+  font-size: 13px;
+  line-height: 1.4;
   color: var(--ink-secondary);
-  padding-right: 40px;
+  border-bottom: 1px solid var(--hairline);
+  background: var(--paper);
+}
+
+/* Sticky failures: a quiet red marker — same hue as the delete hover, so it
+   reads as "needs a decision" without shouting. */
+.error-banner::before {
+  content: "";
+  width: 4px;
+  height: 16px;
+  flex: 0 0 auto;
+  border-radius: 2px;
+  background: transparent;
+  transition: background 160ms var(--ease-out);
+}
+.error-banner[data-sticky]::before {
+  background: hsl(0, 60%, 40%);
+}
+
+.error-banner__text {
+  flex: 1 1 auto;
 }
 
 .error-banner__dismiss {

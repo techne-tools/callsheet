@@ -38,23 +38,27 @@ function addDays(d: Date, n: number): Date {
   return next;
 }
 
-function calmError(e: unknown, context: string): string {
+function calmError(e: unknown, context: string): { message: string; sticky: boolean } {
   console.error(`[callsheet] ${context} failed:`, e);
+  // Sticky (outcome-bearing) failures — delete, delete-type — leave the board
+  // ambiguous (card still there / type still in use), so they must stay until
+  // dismissed. Transient ones (save / load) auto-clear after a moment.
+  const sticky = context === "delete" || context === "delete-type";
   switch (context) {
     case "save":
-      return "Couldn't save this card. It's still here — try again.";
+      return { message: "Couldn't save this card. It's still here — try again.", sticky };
     case "delete":
-      return "Couldn't delete that card. Try again.";
+      return { message: "Couldn't delete that card. Try again.", sticky };
     case "delete-type":
-      // Surface the backend's reason (e.g. "activity type is in use by
-      // cards or templates") — Tauri rejects with the message string.
-      return typeof e === "string" && e.length > 0
-        ? e
-        : "Couldn't delete that activity type. Try again.";
+      return {
+        message:
+          "Couldn't delete that activity type. If it's still in use by a card or template, remove it from those first.",
+        sticky,
+      };
     case "load":
-      return "Couldn't load this day. Try again.";
+      return { message: "Couldn't load this day. Try again.", sticky };
     default:
-      return "Something went wrong. Try again.";
+      return { message: "Something went wrong. Try again.", sticky };
   }
 }
 
@@ -66,7 +70,7 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ message: string; sticky: boolean } | null>(null);
   const [lastDeleted, setLastDeleted] = useState<Card | null>(null);
 
   const dateKey = toISODate(date);
@@ -356,9 +360,11 @@ export default function App() {
   const dismissError = useCallback(() => setError(null), []);
 
   // Auto-clear transient errors after 6s so a stale message can't linger
-  // over the day's cards. Manual dismiss is also available.
+  // over the day's cards. Outcome-bearing (sticky) failures — delete,
+  // delete-type — stay until dismissed: the board is ambiguous until the
+  // user has seen and acted on them. Manual dismiss is always available.
   useEffect(() => {
-    if (error == null) return;
+    if (error == null || error.sticky) return;
     const t = setTimeout(dismissError, 6000);
     return () => clearTimeout(t);
   }, [error, dismissError]);
@@ -785,8 +791,12 @@ export default function App() {
 
         <div className="card-column">
           {error && (
-            <div className="empty-day error-banner" role="alert">
-              <span className="error-banner__text">{error}</span>
+            <div
+              className="error-banner"
+              role="alert"
+              data-sticky={error.sticky || undefined}
+            >
+              <span className="error-banner__text">{error.message}</span>
               <button
                 type="button"
                 className="error-banner__dismiss"
@@ -799,7 +809,7 @@ export default function App() {
             </div>
           )}
 
-          {!error && cards.length === 0 && (
+          {cards.length === 0 && (
             <div className="empty-day">
               <div className="empty-day__mark" aria-hidden="true">
                 ◌
@@ -812,7 +822,7 @@ export default function App() {
             </div>
           )}
 
-          {!error && cards.length > 0 && (
+          {cards.length > 0 && (
             <div className="card-stack" role="list">
               {cards
                 .filter((c) => !c.isGhost)
