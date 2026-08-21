@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { isMac, modLabel } from "../platform";
 
 interface DayNavProps {
   date: Date;
@@ -41,7 +42,7 @@ export default function DayNav({
           className="day-header__nav"
           onClick={onPrev}
           aria-label="Previous day"
-          title="Previous day (Cmd+Left)"
+          title={`Previous day (${modLabel}+Left)`}
         >
           ‹
         </button>
@@ -50,7 +51,7 @@ export default function DayNav({
           className="day-header__nav"
           onClick={onNext}
           aria-label="Next day"
-          title="Next day (Cmd+Right)"
+          title={`Next day (${modLabel}+Right)`}
         >
           ›
         </button>
@@ -64,7 +65,7 @@ export default function DayNav({
           type="button"
           className="day-header__today"
           onClick={onToday}
-          title="Today (Cmd+T)"
+          title={`Today (${modLabel}+T)`}
         >
           Today
         </button>
@@ -119,16 +120,18 @@ export default function DayNav({
               >
                 Hide to menu bar
               </button>
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  onSetPresence("dock");
-                  setPresenceOpen(false);
-                }}
-              >
-                Toggle dock
-              </button>
+              {isMac && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    onSetPresence("dock");
+                    setPresenceOpen(false);
+                  }}
+                >
+                  Toggle dock
+                </button>
+              )}
             </div>
           )}
         </div>

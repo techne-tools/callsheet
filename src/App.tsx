@@ -285,7 +285,10 @@ export default function App() {
         id: 0,
         date: dateKey,
         activityTypeId: typeId,
-        position: cards.filter((c) => !c.isGhost).length,
+        // Position must not collide with a ghost card's MAX(position)+1 slot:
+        // ghosts are appended at the end, so the next free slot is the total
+        // card count (positions are contiguous 0..n-1 after reorder).
+        position: cards.length,
         markdown: "",
         isGhost: false,
       });
@@ -472,7 +475,8 @@ export default function App() {
         id: 0,
         date: dateKey,
         activityTypeId: typeId,
-        position: cards.filter((c) => !c.isGhost).length,
+        // Same invariant as addCard: next free slot is the total card count.
+        position: cards.length,
         markdown: text,
         isGhost: false,
       });
@@ -707,7 +711,8 @@ export default function App() {
                   id: 0,
                   date: dateKeyRef.current,
                   activityTypeId: tpl.activityTypeId,
-                  position: cardsRef.current.filter((c) => !c.isGhost).length,
+                  // Same invariant as addCard: next free slot is the total count.
+                  position: cardsRef.current.length,
                   markdown: tpl.markdown,
                   isGhost: false,
                 });
