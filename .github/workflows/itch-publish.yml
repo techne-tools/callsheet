@@ -1,0 +1,70 @@
+name: Publish to itch.io
+
+# Fires when the draft release created by release.yml is published.
+# Flow: push tag -> release.yml builds 4 platforms -> draft release ->
+#       you publish it -> this workflow pushes the builds to itch.io.
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    name: Push builds to itch.io
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Download release assets
+        run: gh release download "${{ github.event.release.tag_name }}" --dir assets --pattern '*' --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Organize assets by platform
+        run: |
+          mkdir -p push/osx-arm64 push/osx-x86_64 push/linux push/windows
+          # macOS (Apple Silicon)
+          cp assets/*aarch64*.dmg push/osx-arm64/ 2>/dev/null || true
+          cp assets/*arm64*.dmg push/osx-arm64/ 2>/dev/null || true
+          # macOS (Intel)
+          cp assets/*x86_64*.dmg push/osx-x86_64/ 2>/dev/null || true
+          cp assets/*x64*.dmg push/osx-x86_64/ 2>/dev/null || true
+          # Linux
+          cp assets/*.deb assets/*.AppImage assets/*.rpm push/linux/ 2>/dev/null || true
+          # Windows
+          cp assets/*.msi assets/*.exe push/windows/ 2>/dev/null || true
+          echo "--- osx-arm64:"; ls push/osx-arm64/ 2>/dev/null
+          echo "--- osx-x86_64:"; ls push/osx-x86_64/ 2>/dev/null
+          echo "--- linux:"; ls push/linux/ 2>/dev/null
+          echo "--- windows:"; ls push/windows/ 2>/dev/null
+
+      - name: Install butler
+        run: |
+          curl -L -o butler.zip https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default
+          unzip -q butler.zip -d butler-bin
+          chmod +x butler-bin/butler
+          echo "$(pwd)/butler-bin" >> "$GITHUB_PATH"
+          butler version
+
+      - name: Push macOS (Apple Silicon)
+        if: hashFiles('push/osx-arm64/*') != ''
+        run: butler push --if-changed --userversion "${{ github.event.release.tag_name }}" push/osx-arm64 prismatic7/callsheet:osx-arm64
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+
+      - name: Push macOS (Intel)
+        if: hashFiles('push/osx-x86_64/*') != ''
+        run: butler push --if-changed --userversion "${{ github.event.release.tag_name }}" push/osx-x86_64 prismatic7/callsheet:osx-x86_64
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+
+      - name: Push Linux
+        if: hashFiles('push/linux/*') != ''
+        run: butler push --if-changed --userversion "${{ github.event.release.tag_name }}" push/linux prismatic7/callsheet:linux
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+
+      - name: Push Windows
+        if: hashFiles('push/windows/*') != ''
+        run: butler push --if-changed --userversion "${{ github.event.release.tag_name }}" push/windows prismatic7/callsheet:windows
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
