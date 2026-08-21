@@ -19,7 +19,7 @@ interface CardProps {
   activityTypes: ActivityType[];
   selected: boolean;
   editing: boolean;
-  theme: "system" | "light" | "dark";
+  isDark: boolean;
   onSelect: () => void;
   onEdit: () => void;
   onSave: (markdown: string) => void;
@@ -35,7 +35,7 @@ export default function Card({
   activityTypes,
   selected,
   editing,
-  theme,
+  isDark,
   onSelect,
   onEdit,
   onSave,
@@ -404,7 +404,7 @@ export default function Card({
                 >
                   <span
                     className="card__type-dot"
-                    style={{ background: theme === "dark" ? deriveDarkFill(t.colour) : t.colour }}
+                    style={{ background: isDark ? deriveDarkFill(t.colour) : t.colour }}
                     aria-hidden="true"
                   />
                   {t.name}

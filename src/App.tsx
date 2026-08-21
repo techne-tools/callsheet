@@ -87,22 +87,36 @@ export default function App() {
     }
   });
 
-  // Resolve the effective theme and apply it to <html data-theme> so the CSS
-  // token block (html[data-theme="dark"]) takes effect. "system" listens to
-  // the OS preference and updates live.
+  // Track the OS dark preference as state so the *resolved* dark boolean can
+  // drive both the CSS attribute and the JS colour derivations from one source
+  // of truth. "system" listens to the OS and updates live.
+  const [systemDark, setSystemDark] = useState<boolean>(() =>
+    window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ?? false,
+  );
   useEffect(() => {
     const media = window.matchMedia?.("(prefers-color-scheme: dark)");
-    const apply = () => {
-      const dark =
-        theme === "dark" || (theme === "system" && !!media?.matches);
-      document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
-    };
-    apply();
-    if (theme === "system" && media) {
-      media.addEventListener("change", apply);
-      return () => media.removeEventListener("change", apply);
-    }
-  }, [theme]);
+    if (!media) return;
+    const onChange = () => setSystemDark(media.matches);
+    setSystemDark(media.matches);
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
+  }, []);
+
+  // Resolve the effective theme once. This single boolean drives the CSS
+  // [data-theme] attribute AND every JS colour derivation, so they can never
+  // disagree (the bug where cards stayed light pastel while the chrome went
+  // dark in "system" mode).
+  const isDark =
+    theme === "dark" || (theme === "system" && systemDark);
+
+  // Apply the resolved theme to <html data-theme> so the CSS token block
+  // (html[data-theme="dark"]) takes effect.
+  useEffect(() => {
+    document.documentElement.setAttribute(
+      "data-theme",
+      isDark ? "dark" : "light",
+    );
+  }, [isDark]);
 
   const cycleTheme = useCallback(() => {
     setTheme((cur) => {
@@ -225,13 +239,13 @@ export default function App() {
   const fillFor = (card: Card): string => {
     const t = typeById.get(card.activityTypeId);
     const base = t ? t.colour : "hsl(0, 0%, 93%)";
-    return theme === "dark" ? deriveDarkFill(base) : base;
+    return isDark ? deriveDarkFill(base) : base;
   };
 
   const borderFor = (card: Card): string => {
     const t = typeById.get(card.activityTypeId);
     const base = t ? t.colour : "hsl(0, 0%, 93%)";
-    return theme === "dark" ? deriveDarkBorder(base) : deriveBorder(base);
+    return isDark ? deriveDarkBorder(base) : deriveBorder(base);
   };
 
   // Persist the full ordering of the current day (reindex positions 0..n).
@@ -815,7 +829,7 @@ export default function App() {
         templates={templates}
         activityTypes={activityTypes}
         collapsed={sidebarCollapsed}
-        theme={theme}
+        isDark={isDark}
         onToggle={() => setSidebarCollapsed((v) => !v)}
         onTemplateDragStart={(e, t) => beginDrag("template", t.id, e)}
         onDeleteTemplate={(id) => void removeTemplate(id)}
@@ -894,7 +908,7 @@ export default function App() {
                       activityTypes={activityTypes}
                       selected={card.id === selectedId}
                       editing={card.id === editingId}
-                      theme={theme}
+                      isDark={isDark}
                       onSelect={() => setSelectedId(card.id)}
                       onEdit={() =>
                         setEditingId((cur) => (cur === card.id ? null : card.id))

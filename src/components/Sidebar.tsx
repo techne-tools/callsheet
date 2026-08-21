@@ -6,7 +6,7 @@ interface SidebarProps {
   templates: TemplateType[];
   activityTypes: ActivityType[];
   collapsed: boolean;
-  theme: "system" | "light" | "dark";
+  isDark: boolean;
   onToggle: () => void;
   onTemplateDragStart: (e: React.MouseEvent, template: TemplateType) => void;
   onDeleteTemplate: (id: number) => void;
@@ -25,7 +25,7 @@ export default function Sidebar({
   templates,
   activityTypes,
   collapsed,
-  theme,
+  isDark,
   onToggle,
   onTemplateDragStart,
   onDeleteTemplate,
@@ -44,7 +44,7 @@ export default function Sidebar({
   const colourFor = (typeId: number): string => {
     const base =
       activityTypes.find((t) => t.id === typeId)?.colour ?? "hsl(0, 0%, 80%)";
-    return theme === "dark" ? deriveDarkFill(base) : base;
+    return isDark ? deriveDarkFill(base) : base;
   };
 
   const startEdit = (t: TemplateType) => {
@@ -225,7 +225,7 @@ export default function Sidebar({
             <div key={t.id} className="sidebar__type">
               <span
                 className="template__dot"
-                style={{ background: theme === "dark" ? deriveDarkFill(t.colour) : t.colour }}
+                style={{ background: isDark ? deriveDarkFill(t.colour) : t.colour }}
                 aria-hidden="true"
               />
               <span className="sidebar__type-name">{t.name}</span>

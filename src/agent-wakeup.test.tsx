@@ -69,7 +69,27 @@ beforeEach(() => {
 afterEach(() => {
   document.body.innerHTML = "";
   vi.useRealTimers();
+  // Restore matchMedia + localStorage so tests don't leak into each other.
+  vi.restoreAllMocks();
+  try {
+    localStorage.removeItem("callsheet-theme");
+  } catch {
+    /* storage unavailable */
+  }
 });
+
+/** Force the OS dark-preference media query to a fixed answer. */
+function stubMatchMedia(matches: boolean) {
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    value: vi.fn().mockReturnValue({
+      matches,
+      media: "(prefers-color-scheme: dark)",
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }),
+  });
+}
 
 describe("agent wake-up (Phase B)", () => {
   it("reloads the current day when cards-changed fires", async () => {
@@ -133,6 +153,63 @@ describe("agent wake-up (Phase B)", () => {
   });
 });
 
+describe("dark theme colour resolution (Phase B.3)", () => {
+  it("in system mode with a dark OS, cards resolve to a dark fill (not light pastel)", async () => {
+    stubMatchMedia(true); // OS prefers dark
+    mocks.listCards.mockResolvedValue([
+      {
+        id: 5,
+        date: "2026-08-18",
+        activityTypeId: 1,
+        position: 0,
+        markdown: "write READMEs",
+        isGhost: false,
+        source: null,
+      },
+    ]);
+    const root = renderApp();
+    await act(async () => {}); // flush initial load
+
+    // The card must get the dark-derived fill, not the raw light pastel.
+    const card = document.querySelector(".card") as HTMLElement;
+    expect(card).not.toBeNull();
+    // jsdom normalises the inline hsl() to rgb(); a dark fill has low channel
+    // values (~48), a light pastel has high ones (~235).
+    const bg = card.style.background;
+    expect(bg).toMatch(/rgb\(\s*\d+,\s*\d+,\s*\d+/);
+    const channels = bg.match(/\d+/g)!.slice(0, 3).map(Number);
+    const mean = (channels[0] + channels[1] + channels[2]) / 3;
+    expect(mean).toBeLessThan(100); // dark, not pastel
+    act(() => root.unmount());
+  });
+
+  it("in system mode with a light OS, cards keep the light pastel fill", async () => {
+    stubMatchMedia(false); // OS prefers light
+    mocks.listCards.mockResolvedValue([
+      {
+        id: 6,
+        date: "2026-08-18",
+        activityTypeId: 1,
+        position: 0,
+        markdown: "do the car",
+        isGhost: false,
+        source: null,
+      },
+    ]);
+    const root = renderApp();
+    await act(async () => {}); // flush initial load
+
+    const card = document.querySelector(".card") as HTMLElement;
+    expect(card).not.toBeNull();
+    // Light mode keeps the high-lightness pastel (high rgb channels ~235).
+    const bg = card.style.background;
+    const channels = bg.match(/\d+/g)!.slice(0, 3).map(Number);
+    const mean = (channels[0] + channels[1] + channels[2]) / 3;
+    expect(mean).toBeGreaterThan(200); // light pastel kept
+    act(() => root.unmount());
+  });
+});
+
 describe("idle day advance (Phase B.2)", () => {
   function todayISO(): string {
     const d = new Date();
@@ -140,7 +217,6 @@ describe("idle day advance (Phase B.2)", () => {
       d.getDate(),
     ).padStart(2, "0")}`;
   }
-
   function goToPreviousDay() {
     act(() => {
       document.querySelector('[aria-label="Previous day"]')?.dispatchEvent(
