@@ -1,8 +1,9 @@
 //! Colour allocator for custom activity types.
 //!
-//! The palette pool is a set of low-saturation pastel fill HSL tokens
-//! (~92-94% lightness), distinct from the five seed types. Uniqueness is a
-//! hard invariant: a colour is never reused across activity types.
+//! The palette pool is a set of pastel fill HSL tokens (~87-89% lightness,
+//! v0.4.0: strengthened from ~92-94% to match the seed register), distinct
+//! from the five seed types. Uniqueness is a hard invariant: a colour is
+//! never reused across activity types.
 
 use std::collections::HashSet;
 
@@ -11,20 +12,20 @@ use std::collections::HashSet;
 /// Body/Admin) so custom types never collide with seeds either.
 pub fn palette_pool() -> Vec<String> {
     vec![
-        "hsl(260, 20%, 93%)".to_string(), // lavender
-        "hsl(200, 25%, 92%)".to_string(), // sky
-        "hsl(160, 20%, 92%)".to_string(), // mint
-        "hsl(80, 25%, 92%)".to_string(),  // lime
-        "hsl(20, 30%, 93%)".to_string(),  // apricot
-        "hsl(330, 20%, 93%)".to_string(), // blush
-        "hsl(280, 15%, 93%)".to_string(), // mauve
-        "hsl(190, 20%, 92%)".to_string(), // teal
-        "hsl(50, 25%, 92%)".to_string(),  // butter
-        "hsl(0, 15%, 93%)".to_string(),   // coral
-        "hsl(140, 15%, 92%)".to_string(), // sage-light
-        "hsl(220, 20%, 92%)".to_string(), // periwinkle
-        "hsl(10, 20%, 93%)".to_string(),  // peach
-        "hsl(300, 15%, 93%)".to_string(), // orchid
+        "hsl(260, 25%, 88%)".to_string(), // lavender
+        "hsl(200, 30%, 87%)".to_string(), // sky
+        "hsl(160, 25%, 87%)".to_string(), // mint
+        "hsl(80, 30%, 87%)".to_string(),  // lime
+        "hsl(20, 35%, 88%)".to_string(),  // apricot
+        "hsl(330, 25%, 88%)".to_string(), // blush
+        "hsl(280, 20%, 88%)".to_string(), // mauve
+        "hsl(190, 25%, 87%)".to_string(), // teal
+        "hsl(50, 30%, 87%)".to_string(),  // butter
+        "hsl(0, 20%, 88%)".to_string(),   // coral
+        "hsl(140, 20%, 87%)".to_string(), // sage-light
+        "hsl(220, 25%, 87%)".to_string(), // periwinkle
+        "hsl(10, 25%, 88%)".to_string(),  // peach
+        "hsl(300, 20%, 88%)".to_string(), // orchid
     ]
 }
 
@@ -50,7 +51,7 @@ pub fn allocate(used: &HashSet<String>) -> String {
     sorted.hash(&mut hasher);
     let mut h = (hasher.finish() % 360) as u32;
     loop {
-        let colour = format!("hsl({}, 20%, 93%)", h);
+        let colour = format!("hsl({}, 25%, 88%)", h);
         if !used.contains(&colour) {
             return colour;
         }

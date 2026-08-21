@@ -11,13 +11,18 @@ use std::collections::HashSet;
 
 use crate::colour_allocator;
 
-/// The five seed activity types with their exact DESIGN.md fill HSL tokens.
+/// The five seed activity types with their fill HSL tokens.
+///
+/// v0.4.0: fills strengthened from ~92-94% lightness to ~87-89% with higher
+/// saturation, so the colour grammar reads more clearly against the paper
+/// surface while staying pastel (the calm register). The border is derived
+/// from the same hue at a lower lightness (see tauri.ts deriveBorder).
 const SEED_TYPES: &[(&str, &str)] = &[
-    ("Research", "hsl(215, 15%, 93%)"),
-    ("Making", "hsl(120, 15%, 92%)"),
-    ("Teaching", "hsl(38, 30%, 93%)"),
-    ("Body", "hsl(350, 20%, 94%)"),
-    ("Admin", "hsl(30, 10%, 93%)"),
+    ("Research", "hsl(215, 20%, 88%)"),
+    ("Making", "hsl(120, 20%, 87%)"),
+    ("Teaching", "hsl(38, 40%, 88%)"),
+    ("Body", "hsl(350, 30%, 89%)"),
+    ("Admin", "hsl(30, 15%, 88%)"),
 ];
 
 /// Create the schema tables if they do not exist.
@@ -80,6 +85,20 @@ pub fn seed_activity_types(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+/// v0.4.0 migration: refresh the five seed types' colours to the strengthened
+/// values. Runs on every open (idempotent) so existing databases pick up the
+/// stronger palette without a schema bump. Custom types are untouched — their
+/// colours are user data, not a seed invariant.
+pub fn migrate_seed_colours(conn: &Connection) -> Result<()> {
+    for (name, colour) in SEED_TYPES {
+        conn.execute(
+            "UPDATE activity_types SET colour = ?1 WHERE name = ?2 AND is_seed = 1",
+            params![colour, name],
+        )?;
+    }
+    Ok(())
+}
+
 /// Open (or create) the database at the given path and run schema + seed.
 ///
 /// WAL journal mode lets a second process (the agent's proposal script) write
@@ -91,6 +110,7 @@ pub fn open(path: &std::path::Path) -> Result<Connection> {
     conn.pragma_update(None, "busy_timeout", 5000)?;
     init_schema(&conn)?;
     seed_activity_types(&conn)?;
+    migrate_seed_colours(&conn)?;
     Ok(conn)
 }
 
@@ -101,6 +121,7 @@ pub fn open_in_memory() -> Result<Connection> {
     conn.pragma_update(None, "foreign_keys", true)?;
     init_schema(&conn)?;
     seed_activity_types(&conn)?;
+    migrate_seed_colours(&conn)?;
     Ok(conn)
 }
 
@@ -539,7 +560,7 @@ mod tests {
         let types = list_activity_types(&conn).unwrap();
         assert_eq!(types.len(), 5);
         let research = types.iter().find(|t| t.name == "Research").unwrap();
-        assert_eq!(research.colour, "hsl(215, 15%, 93%)");
+        assert_eq!(research.colour, "hsl(215, 20%, 88%)");
 
         // Insert a card.
         let saved = save_card(
@@ -606,6 +627,38 @@ mod tests {
         // Delete.
         delete_card(&conn, saved.id).unwrap();
         assert_eq!(list_cards(&conn, "2026-08-18").unwrap().len(), 1);
+    }
+
+    #[test]
+    fn migrate_seed_colours_refreshes_existing_seed_rows() {
+        // Simulate a pre-v0.4.0 database: seed with the old palette, then run
+        // the migration and confirm the seed rows are refreshed to the
+        // strengthened values while custom types are untouched.
+        let conn = Connection::open_in_memory().unwrap();
+        conn.pragma_update(None, "foreign_keys", true).unwrap();
+        init_schema(&conn).unwrap();
+        // Old seed colours (pre-v0.4.0).
+        conn.execute_batch(
+            "INSERT INTO activity_types (name, colour, is_seed) VALUES
+                ('Research', 'hsl(215, 15%, 93%)', 1),
+                ('Making', 'hsl(120, 15%, 92%)', 1),
+                ('Teaching', 'hsl(38, 30%, 93%)', 1),
+                ('Body', 'hsl(350, 20%, 94%)', 1),
+                ('Admin', 'hsl(30, 10%, 93%)', 1),
+                ('Custom', 'hsl(260, 20%, 93%)', 0)",
+        )
+        .unwrap();
+
+        migrate_seed_colours(&conn).unwrap();
+
+        let types = list_activity_types(&conn).unwrap();
+        let research = types.iter().find(|t| t.name == "Research").unwrap();
+        assert_eq!(research.colour, "hsl(215, 20%, 88%)");
+        let making = types.iter().find(|t| t.name == "Making").unwrap();
+        assert_eq!(making.colour, "hsl(120, 20%, 87%)");
+        // Custom types are user data — untouched by the migration.
+        let custom = types.iter().find(|t| t.name == "Custom").unwrap();
+        assert_eq!(custom.colour, "hsl(260, 20%, 93%)");
     }
 
     #[test]

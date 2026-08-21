@@ -9,6 +9,8 @@ interface DayNavProps {
   onToday: () => void;
   onPropose: () => void;
   onSetPresence: (mode: "normal" | "statusbar" | "dock") => void;
+  onCycleTheme: () => void;
+  theme: "system" | "light" | "dark";
 }
 
 function formatWeekday(d: Date): string {
@@ -31,8 +33,13 @@ export default function DayNav({
   onToday,
   onPropose,
   onSetPresence,
+  onCycleTheme,
+  theme,
 }: DayNavProps) {
   const [presenceOpen, setPresenceOpen] = useState(false);
+
+  const themeLabel =
+    theme === "system" ? "Theme: system" : theme === "light" ? "Theme: light" : "Theme: dark";
 
   return (
     <header className="day-header">
@@ -86,6 +93,15 @@ export default function DayNav({
           title="Propose a ghost card"
         >
           ◌
+        </button>
+        <button
+          type="button"
+          className="day-header__theme"
+          onClick={onCycleTheme}
+          aria-label={themeLabel}
+          title={`${themeLabel} — click to cycle`}
+        >
+          {theme === "dark" ? "◐" : theme === "light" ? "☀" : "◑"}
         </button>
         <div className="day-header__presence">
           <button

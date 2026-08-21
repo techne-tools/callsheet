@@ -30,6 +30,12 @@
   --hover-border: hsl(0, 0%, 75%);
   --rail-hover: hsl(0, 0%, 94%);
 
+  /* Destructive register — the quiet red shared by every delete affordance
+     (card, ghost, template, sticky error). Tokenised so the dark theme can
+     lift it without touching each rule. */
+  --danger: hsl(0, 60%, 40%);
+  --danger-border: hsl(0, 60%, 70%);
+
   /* Type */
   --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
     Arial, sans-serif;
@@ -58,6 +64,51 @@
 
   /* Motion */
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ---------------------------------------------------------------------------
+   Dark theme — applied via [data-theme="dark"] on <html> (set by the app from
+   the system preference or a user toggle). The calm register holds: the same
+   neutral hierarchy, the same quiet chrome, the same single accent. Only the
+   surfaces invert; the pastel card fills are re-derived in JS (deriveDarkFill)
+   so the colour grammar stays legible on a dark ground.
+   ------------------------------------------------------------------------- */
+
+html[data-theme="dark"] {
+  /* Neutral surfaces — inverted, not just dimmed */
+  --paper: hsl(0, 0%, 10%);
+  --ink: hsl(0, 0%, 92%);
+  --ink-secondary: hsl(0, 0%, 62%);
+  --ghost-border: hsl(0, 0%, 42%);
+  --hairline: hsl(0, 0%, 20%);
+
+  /* Accent (blue-grey) — lifted so it reads on the dark ground */
+  --accent-focus: hsl(215, 20%, 66%);
+  --accent-focus-soft: hsl(215, 20%, 30%);
+  --accent-caret: hsl(215, 25%, 72%);
+  --accent-over: hsl(215, 20%, 16%);
+
+  /* Ghost card (agent proposal) */
+  --ghost-hover-border: hsl(0, 0%, 60%);
+  --ghost-hover-ink: hsl(0, 0%, 80%);
+  --ghost-label: hsl(0, 0%, 62%);
+
+  /* Quiet chrome */
+  --scrollbar-thumb: hsl(0, 0%, 30%);
+  --scrollbar-thumb-hover: hsl(0, 0%, 42%);
+  --blockquote-border: hsl(0, 0%, 34%);
+  --hover-border: hsl(0, 0%, 34%);
+  --rail-hover: hsl(0, 0%, 16%);
+
+  /* Destructive register — lifted for contrast on the dark ground */
+  --danger: hsl(0, 65%, 66%);
+  --danger-border: hsl(0, 50%, 40%);
+
+  /* Material — shadows deepen against the dark surface */
+  --surface: hsl(0, 0%, 13%);
+  --shadow-card: 0 1px 2px hsla(0, 0%, 0%, 0.5), 0 6px 16px hsla(0, 0%, 0%, 0.4);
+  --shadow-menu: 0 4px 12px hsla(0, 0%, 0%, 0.5);
+  --shadow-ghost: 0 4px 12px hsla(0, 0%, 0%, 0.5);
 }
 
 /* ---------------------------------------------------------------------------
@@ -285,6 +336,31 @@ body {
   background: var(--rail-hover);
 }
 
+/* Theme toggle — a quiet icon button in the header tools, same register as
+   the presence/add buttons. Cycles system -> light -> dark. */
+.day-header__theme {
+  appearance: none;
+  border: 1px solid var(--hairline);
+  background: transparent;
+  color: var(--ink-secondary);
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 120ms var(--ease-out), border-color 120ms var(--ease-out),
+    box-shadow 120ms var(--ease-out);
+}
+.day-header__theme:hover {
+  color: var(--ink);
+  border-color: var(--hover-border);
+  box-shadow: var(--shadow-card);
+}
+
 /* ---------------------------------------------------------------------------
    Card column
    ------------------------------------------------------------------------- */
@@ -413,7 +489,7 @@ body {
   transition: background 160ms var(--ease-out);
 }
 .error-banner[data-sticky]::before {
-  background: hsl(0, 60%, 40%);
+  background: var(--danger);
 }
 
 .error-banner__text {
@@ -573,8 +649,8 @@ body {
 /* Destructive signal: delete turns a quiet red on hover — signals
    destruction without shouting (design review item 8). */
 .card__action--delete:hover {
-  color: hsl(0, 60%, 40%);
-  border-color: hsl(0, 60%, 70%);
+  color: var(--danger);
+  border-color: var(--danger-border);
 }
 
 /* Per-card activity-type picker (design review item 5) */
@@ -739,8 +815,8 @@ body {
   transition: color 120ms var(--ease-out), border-color 120ms var(--ease-out);
 }
 .ghost-card__dismiss:hover {
-  color: hsl(0, 60%, 40%);
-  border-color: hsl(0, 60%, 70%);
+  color: var(--danger);
+  border-color: var(--danger-border);
 }
 
 /* ---------------------------------------------------------------------------
@@ -902,8 +978,8 @@ body {
 /* Destructive signal: same quiet red as the card delete (design review
    item 8) — every delete button shares one hover language. */
 .template__delete:hover {
-  color: hsl(0, 60%, 40%);
-  border-color: hsl(0, 60%, 70%);
+  color: var(--danger);
+  border-color: var(--danger-border);
 }
 
 /* Template edit mode (double-click a template) */

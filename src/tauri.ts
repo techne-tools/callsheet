@@ -41,13 +41,38 @@ export interface Template {
 }
 
 // ---------------------------------------------------------------------------
-// Colour helpers (CONTRACT.md: border derived from fill hue at 70% lightness)
+// Colour helpers (CONTRACT.md: border derived from fill hue at a lower
+// lightness so the pastel reads as fill, not blur)
 // ---------------------------------------------------------------------------
 
 const HSL_RE = /hsl\(\s*(\d+)\s*,\s*([\d.]+)%\s*,\s*[\d.]+%\s*\)/;
 
-/** Derive the accent border from a fill HSL token (same hue, given lightness). */
-export function deriveBorder(fill: string, lightness = 70): string {
+/**
+ * Derive the accent border from a fill HSL token (same hue, given lightness).
+ * v0.4.0: default border lightness lowered 70 -> 62 so the border still frames
+ * the strengthened (~88%) fills — a 70% border on an 88% fill would read as
+ * blur, not frame.
+ */
+export function deriveBorder(fill: string, lightness = 62): string {
+  const m = HSL_RE.exec(fill);
+  if (!m) return fill;
+  return `hsl(${m[1]}, ${m[2]}%, ${lightness}%)`;
+}
+
+/**
+ * Derive a dark-theme fill from a light fill HSL token: same hue, saturation
+ * held, lightness dropped to ~22% so the card reads as a quiet dark surface
+ * with a coloured tint rather than a bright pastel on a dark background.
+ * The border is derived from the same hue at a slightly lighter value so the
+ * frame still reads against the dark fill.
+ */
+export function deriveDarkFill(fill: string, lightness = 22): string {
+  const m = HSL_RE.exec(fill);
+  if (!m) return fill;
+  return `hsl(${m[1]}, ${m[2]}%, ${lightness}%)`;
+}
+
+export function deriveDarkBorder(fill: string, lightness = 34): string {
   const m = HSL_RE.exec(fill);
   if (!m) return fill;
   return `hsl(${m[1]}, ${m[2]}%, ${lightness}%)`;

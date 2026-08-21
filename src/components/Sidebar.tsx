@@ -1,10 +1,12 @@
 import { useState } from "react";
 import type { ActivityType, Template as TemplateType } from "../tauri";
+import { deriveDarkFill } from "../tauri";
 
 interface SidebarProps {
   templates: TemplateType[];
   activityTypes: ActivityType[];
   collapsed: boolean;
+  theme: "system" | "light" | "dark";
   onToggle: () => void;
   onTemplateDragStart: (e: React.MouseEvent, template: TemplateType) => void;
   onDeleteTemplate: (id: number) => void;
@@ -23,6 +25,7 @@ export default function Sidebar({
   templates,
   activityTypes,
   collapsed,
+  theme,
   onToggle,
   onTemplateDragStart,
   onDeleteTemplate,
@@ -38,8 +41,11 @@ export default function Sidebar({
   const [typeDraft, setTypeDraft] = useState("");
   const [addingType, setAddingType] = useState(false);
 
-  const colourFor = (typeId: number): string =>
-    activityTypes.find((t) => t.id === typeId)?.colour ?? "hsl(0, 0%, 80%)";
+  const colourFor = (typeId: number): string => {
+    const base =
+      activityTypes.find((t) => t.id === typeId)?.colour ?? "hsl(0, 0%, 80%)";
+    return theme === "dark" ? deriveDarkFill(base) : base;
+  };
 
   const startEdit = (t: TemplateType) => {
     setEditingId(t.id);
@@ -219,7 +225,7 @@ export default function Sidebar({
             <div key={t.id} className="sidebar__type">
               <span
                 className="template__dot"
-                style={{ background: t.colour }}
+                style={{ background: theme === "dark" ? deriveDarkFill(t.colour) : t.colour }}
                 aria-hidden="true"
               />
               <span className="sidebar__type-name">{t.name}</span>

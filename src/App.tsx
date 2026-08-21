@@ -17,6 +17,8 @@ import {
   updateTemplate,
   setWindowPresence,
   deriveBorder,
+  deriveDarkFill,
+  deriveDarkBorder,
 } from "./tauri";
 import { markdownToPlainText, templateNameFromMarkdown } from "./markdown";
 import CardView from "./components/Card";
@@ -72,6 +74,47 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [error, setError] = useState<{ message: string; sticky: boolean } | null>(null);
   const [lastDeleted, setLastDeleted] = useState<Card | null>(null);
+  // Theme: "system" follows the OS preference; "light" / "dark" are explicit
+  // overrides. Persisted so the choice survives relaunch.
+  const [theme, setTheme] = useState<"system" | "light" | "dark">(() => {
+    try {
+      const saved = localStorage.getItem("callsheet-theme");
+      return saved === "light" || saved === "dark" || saved === "system"
+        ? saved
+        : "system";
+    } catch {
+      return "system"; // storage unavailable (e.g. test env)
+    }
+  });
+
+  // Resolve the effective theme and apply it to <html data-theme> so the CSS
+  // token block (html[data-theme="dark"]) takes effect. "system" listens to
+  // the OS preference and updates live.
+  useEffect(() => {
+    const media = window.matchMedia?.("(prefers-color-scheme: dark)");
+    const apply = () => {
+      const dark =
+        theme === "dark" || (theme === "system" && !!media?.matches);
+      document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+    };
+    apply();
+    if (theme === "system" && media) {
+      media.addEventListener("change", apply);
+      return () => media.removeEventListener("change", apply);
+    }
+  }, [theme]);
+
+  const cycleTheme = useCallback(() => {
+    setTheme((cur) => {
+      const next = cur === "system" ? "light" : cur === "light" ? "dark" : "system";
+      try {
+        localStorage.setItem("callsheet-theme", next);
+      } catch {
+        // storage unavailable — the in-memory choice still applies this session
+      }
+      return next;
+    });
+  }, []);
 
   const dateKey = toISODate(date);
   const dayPaneRef = useRef<HTMLDivElement>(null);
@@ -181,10 +224,15 @@ export default function App() {
 
   const fillFor = (card: Card): string => {
     const t = typeById.get(card.activityTypeId);
-    return t ? t.colour : "hsl(0, 0%, 93%)";
+    const base = t ? t.colour : "hsl(0, 0%, 93%)";
+    return theme === "dark" ? deriveDarkFill(base) : base;
   };
 
-  const borderFor = (card: Card): string => deriveBorder(fillFor(card));
+  const borderFor = (card: Card): string => {
+    const t = typeById.get(card.activityTypeId);
+    const base = t ? t.colour : "hsl(0, 0%, 93%)";
+    return theme === "dark" ? deriveDarkBorder(base) : deriveBorder(base);
+  };
 
   // Persist the full ordering of the current day (reindex positions 0..n).
   const persistOrder = useCallback(
@@ -767,6 +815,7 @@ export default function App() {
         templates={templates}
         activityTypes={activityTypes}
         collapsed={sidebarCollapsed}
+        theme={theme}
         onToggle={() => setSidebarCollapsed((v) => !v)}
         onTemplateDragStart={(e, t) => beginDrag("template", t.id, e)}
         onDeleteTemplate={(id) => void removeTemplate(id)}
@@ -792,6 +841,8 @@ export default function App() {
           onToday={() => setDate(new Date())}
           onPropose={() => void proposeGhost()}
           onSetPresence={(mode) => void setPresence(mode)}
+          onCycleTheme={cycleTheme}
+          theme={theme}
         />
 
         <div className="card-column">
@@ -843,6 +894,7 @@ export default function App() {
                       activityTypes={activityTypes}
                       selected={card.id === selectedId}
                       editing={card.id === editingId}
+                      theme={theme}
                       onSelect={() => setSelectedId(card.id)}
                       onEdit={() =>
                         setEditingId((cur) => (cur === card.id ? null : card.id))

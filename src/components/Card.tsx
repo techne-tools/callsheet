@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { ActivityType, Card as CardType } from "../tauri";
+import { deriveDarkFill } from "../tauri";
 import { parseInline, renderMarkdown } from "../markdown";
 import {
   applyLineTransform,
@@ -18,6 +19,7 @@ interface CardProps {
   activityTypes: ActivityType[];
   selected: boolean;
   editing: boolean;
+  theme: "system" | "light" | "dark";
   onSelect: () => void;
   onEdit: () => void;
   onSave: (markdown: string) => void;
@@ -33,6 +35,7 @@ export default function Card({
   activityTypes,
   selected,
   editing,
+  theme,
   onSelect,
   onEdit,
   onSave,
@@ -401,7 +404,7 @@ export default function Card({
                 >
                   <span
                     className="card__type-dot"
-                    style={{ background: t.colour }}
+                    style={{ background: theme === "dark" ? deriveDarkFill(t.colour) : t.colour }}
                     aria-hidden="true"
                   />
                   {t.name}
