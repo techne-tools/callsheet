@@ -44,3 +44,10 @@ RECON.md
 TASK.md
 CONTRACT.md
 .impeccable/
+
+# agent-orchestrator station output captures
+.ao-capture/
+
+# launch listing drafts
+itch-listing-draft.md
+producthunt-launch-draft.md
