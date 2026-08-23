@@ -14,10 +14,14 @@ jobs:
     permissions:
       contents: read
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Download release assets
-        run: gh release download "${{ github.event.release.tag_name }}" --dir assets --pattern '*' --clobber
+        run: gh release download "$TAG_NAME" --dir assets --pattern '*' --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ github.event.release.tag_name }}
 
       - name: Organize assets by platform
         run: |
@@ -47,24 +51,28 @@ jobs:
 
       - name: Push macOS (Apple Silicon)
         if: hashFiles('push/osx-arm64/*') != ''
-        run: butler push --if-changed --userversion "${{ github.event.release.tag_name }}" push/osx-arm64 prismatic7/callsheet:osx-arm64
+        run: butler push --if-changed --userversion "$USERVERSION" push/osx-arm64 prismatic7/callsheet:osx-arm64
         env:
           BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+          USERVERSION: ${{ github.event.release.tag_name }}
 
       - name: Push macOS (Intel)
         if: hashFiles('push/osx-x86_64/*') != ''
-        run: butler push --if-changed --userversion "${{ github.event.release.tag_name }}" push/osx-x86_64 prismatic7/callsheet:osx-x86_64
+        run: butler push --if-changed --userversion "$USERVERSION" push/osx-x86_64 prismatic7/callsheet:osx-x86_64
         env:
           BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+          USERVERSION: ${{ github.event.release.tag_name }}
 
       - name: Push Linux
         if: hashFiles('push/linux/*') != ''
-        run: butler push --if-changed --userversion "${{ github.event.release.tag_name }}" push/linux prismatic7/callsheet:linux
+        run: butler push --if-changed --userversion "$USERVERSION" push/linux prismatic7/callsheet:linux
         env:
           BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+          USERVERSION: ${{ github.event.release.tag_name }}
 
       - name: Push Windows
         if: hashFiles('push/windows/*') != ''
-        run: butler push --if-changed --userversion "${{ github.event.release.tag_name }}" push/windows prismatic7/callsheet:windows
+        run: butler push --if-changed --userversion "$USERVERSION" push/windows prismatic7/callsheet:windows
         env:
           BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+          USERVERSION: ${{ github.event.release.tag_name }}
