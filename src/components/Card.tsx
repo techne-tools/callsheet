@@ -1,16 +1,20 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ActivityType, Card as CardType } from "../tauri";
 import { deriveDarkFill } from "../tauri";
 import { parseInline, renderMarkdown } from "../markdown";
 import {
   applyLineTransform,
+  blockKindOf,
+  canonicalInlineHtml,
   caretOffsetInLine,
+  changeBlockKind,
   exitList,
   exitQuote,
   htmlToMarkdown,
   lineMarkdown,
   setCaretAtMarkdownOffset,
 } from "../editor";
+import type { BlockKind } from "../editor";
 
 interface CardProps {
   card: CardType;
@@ -46,6 +50,48 @@ export default function Card({
   const editorRef = useRef<HTMLDivElement>(null);
   const committedRef = useRef(false);
   const [typeOpen, setTypeOpen] = useState(false);
+  const [format, setFormat] = useState<FormatState>({
+    bold: false,
+    italic: false,
+    block: "p",
+  });
+
+  /**
+   * Refresh the rail's view of the document. It reads real state rather than
+   * tracking its own copy: a rail that guesses drifts out of sync the moment
+   * the caret moves, and a formatting control that lies about what is active
+   * is worse than no control.
+   */
+  const syncFormatState = useCallback(() => {
+    const el = editorRef.current;
+    if (!el) return;
+    let bold = false;
+    let italic = false;
+    try {
+      bold = document.queryCommandState("bold");
+      italic = document.queryCommandState("italic");
+    } catch {
+      // queryCommandState is unavailable in some environments (e.g. jsdom):
+      // show no active inline state rather than throwing during a keystroke.
+    }
+    const line = lineAtSelection(el);
+    const next: FormatState = {
+      bold,
+      italic,
+      block: line ? blockKindOf(line) : "p",
+    };
+    // Only re-render when something actually changed. This runs on every
+    // keystroke, and setting identical state would rebuild the rail (and the
+    // card subtree) sixty times a second for no visible difference — the same
+    // needless-work problem the editor itself was just fixed for.
+    setFormat((prev) =>
+      prev.bold === next.bold &&
+      prev.italic === next.italic &&
+      prev.block === next.block
+        ? prev
+        : next,
+    );
+  }, []);
 
   // Entering edit mode: render the markdown into the contentEditable and
   // place the caret at the end.
@@ -69,9 +115,23 @@ export default function Card({
           sel?.addRange(range);
         }
         el.focus();
+        syncFormatState();
       }
     }
-  }, [editing, card.markdown]);
+  }, [editing, card.markdown, syncFormatState]);
+
+  // Keep the rail honest as the caret moves (arrow keys, clicks, selection).
+  useEffect(() => {
+    if (!editing) return;
+    const onSelectionChange = () => {
+      const el = editorRef.current;
+      const anchor = document.getSelection()?.anchorNode ?? null;
+      if (el && anchor && el.contains(anchor)) syncFormatState();
+    };
+    document.addEventListener("selectionchange", onSelectionChange);
+    return () =>
+      document.removeEventListener("selectionchange", onSelectionChange);
+  }, [editing, syncFormatState]);
 
   const commit = () => {
     if (committedRef.current) return;
@@ -87,37 +147,42 @@ export default function Card({
   /** The block element the caret is currently inside. */
   const currentLine = (): HTMLElement | null => {
     const el = editorRef.current;
-    if (!el) return null;
-    const sel = document.getSelection();
-    if (!sel || sel.rangeCount === 0) return null;
-    let node: Node | null = sel.getRangeAt(0).startContainer;
-    while (node && node !== el) {
-      if (node.nodeType === Node.ELEMENT_NODE) {
-        const tag = (node as HTMLElement).tagName.toLowerCase();
-        if (["p", "h1", "h2", "h3", "li"].includes(tag)) return node as HTMLElement;
-      }
-      node = node.parentNode;
-    }
-    return null;
+    return el ? lineAtSelection(el) : null;
   };
 
-  /** Re-render a line's inline content from its markdown, preserving caret. */
+  /**
+   * Re-render a line's inline content from its markdown — but only when the
+   * rendered result actually differs from what is already on screen.
+   *
+   * This guard is load-bearing. Replacing innerHTML tears down and rebuilds every
+   * text node: the caret has to be saved and restored, the browser's native undo
+   * stack for the field is discarded, and IME composition is interrupted. Doing
+   * that on every keystroke is what made typing feel rough and killed Cmd+Z
+   * while editing. Comparing canonical forms means a normal keystroke (which
+   * changes nothing about the markup) rewrites nothing at all, and the DOM is
+   * only rebuilt at the moment a markdown transform genuinely changes rendering.
+   */
   const refreshLine = (line: HTMLElement) => {
     const sel = document.getSelection();
     if (!sel || sel.rangeCount === 0) return;
     const offset = caretOffsetInLine(line, sel);
     const md = lineMarkdown(line);
     const tag = line.tagName.toLowerCase();
+    let html: string;
     if (tag === "li") {
-      line.innerHTML = md.startsWith("- ") ? parseInlineSafe(md.slice(2)) : "<br>";
+      html = md.startsWith("- ") ? parseInlineSafe(md.slice(2)) : "<br>";
     } else if (tag === "h1" || tag === "h2" || tag === "h3") {
       const n = Number(tag[1]);
-      line.innerHTML = parseInlineSafe(md.slice(n + 1));
+      html = parseInlineSafe(md.slice(n + 1));
     } else if (tag === "p" && line.parentElement?.tagName.toLowerCase() === "blockquote") {
-      line.innerHTML = parseInlineSafe(md.startsWith("> ") ? md.slice(2) : md);
+      html = parseInlineSafe(md.startsWith("> ") ? md.slice(2) : md);
     } else {
-      line.innerHTML = parseInlineSafe(md);
+      html = parseInlineSafe(md);
     }
+    // Nothing to do: the line already renders as its markdown requires, so
+    // leave the DOM (and the caret, and the undo stack) untouched.
+    if (canonicalInlineHtml(line.innerHTML) === canonicalInlineHtml(html)) return;
+    line.innerHTML = html;
     setCaretAtMarkdownOffset(line, offset);
   };
 
@@ -131,9 +196,50 @@ export default function Card({
     const transformed = applyLineTransform(line, md, caret);
     if (transformed) {
       setCaretAtMarkdownOffset(transformed.line, transformed.caretOffset);
+      syncFormatState();
       return;
     }
     refreshLine(line);
+    syncFormatState();
+  };
+
+  /**
+   * Format an inline range with the browser's own command, then leave the DOM
+   * alone. Deliberately NOT followed by a refreshLine call: the browser has
+   * already produced the correct rendering, and immediately re-serialising it
+   * through markdown is what used to make Cmd+B appear to do nothing (the
+   * serializer dropped <b>/<i>, so the formatting was written back as plain
+   * text on the very next event). The markup is normalised to markdown's own
+   * tags on commit instead.
+   */
+  const applyInline = (command: "bold" | "italic") => {
+    const el = editorRef.current;
+    if (!el) return;
+    // Focus only when focus is actually missing. Calling it unconditionally
+    // would throw the caret to a default position and destroy the selection the
+    // user just made before pressing the button.
+    if (document.activeElement !== el) el.focus();
+    try {
+      document.execCommand(command);
+    } catch {
+      // Command unavailable; the rail simply does nothing rather than throwing.
+    }
+    syncFormatState();
+  };
+
+  /** Convert the caret's line to a block kind (heading, quote, list, plain). */
+  const applyBlock = (kind: BlockKind) => {
+    const el = editorRef.current;
+    const sel = document.getSelection();
+    const line = currentLine();
+    if (!el || !line || !sel || sel.rangeCount === 0) return;
+    const caret = caretOffsetInLine(line, sel);
+    if (document.activeElement !== el) el.focus();
+    const next = changeBlockKind(line, kind, caret);
+    // Caret after focus: focusing first and placing the range second is the
+    // order that survives, since focusing can reset the selection.
+    setCaretAtMarkdownOffset(next.line, next.caretOffset);
+    syncFormatState();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -312,7 +418,9 @@ export default function Card({
 
   return (
     <div
-      className={`card${selected ? " card--selected" : ""}`}
+      className={`card${selected ? " card--selected" : ""}${
+        editing ? " card--editing" : ""
+      }`}
       style={{ background: fill, borderColor: selected ? undefined : border }}
       onClick={onSelect}
       onDoubleClick={onEdit}
@@ -341,22 +449,143 @@ export default function Card({
           {activityTypes.find((t) => t.id === card.activityTypeId)?.name ?? ""}
         </div>
         {editing ? (
-          <div
-            ref={editorRef}
-            className="card__editor"
-            contentEditable
-            suppressContentEditableWarning
-            spellCheck={false}
-            onInput={handleInput}
-            onKeyDown={handleKeyDown}
-            onPaste={handlePaste}
-            onDrop={handleDrop}
-            onDragOver={(e) => e.preventDefault()}
-            onBlur={commit}
-            role="textbox"
-            aria-multiline="true"
-            aria-label="Card content (markdown)"
-          />
+          <>
+            <div
+              ref={editorRef}
+              className="card__editor"
+              contentEditable
+              suppressContentEditableWarning
+              spellCheck={false}
+              onInput={handleInput}
+              onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
+              onDrop={handleDrop}
+              onDragOver={(e) => e.preventDefault()}
+              onBlur={commit}
+              // Double-clicking a word is how you select text, but the card's
+              // own dblclick handler toggles edit mode — so without this, the
+              // most common selection gesture in the editor would exit
+              // editing. Keep the gesture inside the editor while editing.
+              onDoubleClick={(e) => e.stopPropagation()}
+              role="textbox"
+              aria-multiline="true"
+              aria-label="Card content (markdown)"
+            />
+            {/*
+              Format rail. Present only while editing, so the board stays quiet
+              at rest — a control that never appears unprompted, in keeping with
+              presence not pressure. Buttons reflect real document state, and
+              every one of them keeps focus in the editor on mousedown.
+            */}
+            <div className="card__format" role="toolbar" aria-label="Formatting">
+              <button
+                type="button"
+                className={`card__format-btn card__format-btn--bold${
+                  format.bold ? " card__format-btn--on" : ""
+                }`}
+                onMouseDown={keepEditorFocus}
+                onClick={() => applyInline("bold")}
+                title="Bold (⌘B)"
+                aria-label="Bold"
+                aria-pressed={format.bold}
+              >
+                B
+              </button>
+              <button
+                type="button"
+                className={`card__format-btn card__format-btn--italic${
+                  format.italic ? " card__format-btn--on" : ""
+                }`}
+                onMouseDown={keepEditorFocus}
+                onClick={() => applyInline("italic")}
+                title="Italic (⌘I)"
+                aria-label="Italic"
+                aria-pressed={format.italic}
+              >
+                I
+              </button>
+
+              <span className="card__format-sep" aria-hidden="true" />
+
+              {([1, 2, 3] as const).map((level) => {
+                const kind = `h${level}` as BlockKind;
+                return (
+                  <button
+                    key={kind}
+                    type="button"
+                    className={`card__format-btn card__format-btn--head${
+                      format.block === kind ? " card__format-btn--on" : ""
+                    }`}
+                    onMouseDown={keepEditorFocus}
+                    onClick={() => applyBlock(kind)}
+                    title={`Heading ${level}`}
+                    aria-label={`Heading ${level}`}
+                    aria-pressed={format.block === kind}
+                  >
+                    H{level}
+                  </button>
+                );
+              })}
+
+              <span className="card__format-sep" aria-hidden="true" />
+
+              <button
+                type="button"
+                className={`card__format-btn${
+                  format.block === "li" ? " card__format-btn--on" : ""
+                }`}
+                onMouseDown={keepEditorFocus}
+                onClick={() => applyBlock("li")}
+                title="Bullet list"
+                aria-label="Bullet list"
+                aria-pressed={format.block === "li"}
+              >
+                <svg
+                  width="11"
+                  height="11"
+                  viewBox="0 0 11 11"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.3"
+                  strokeLinecap="round"
+                  aria-hidden="true"
+                >
+                  <path d="M4 2.5h6M4 5.5h6M4 8.5h6" />
+                  <circle cx="1.6" cy="2.5" r="0.9" fill="currentColor" stroke="none" />
+                  <circle cx="1.6" cy="5.5" r="0.9" fill="currentColor" stroke="none" />
+                  <circle cx="1.6" cy="8.5" r="0.9" fill="currentColor" stroke="none" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                className={`card__format-btn${
+                  format.block === "quote" ? " card__format-btn--on" : ""
+                }`}
+                onMouseDown={keepEditorFocus}
+                onClick={() => applyBlock("quote")}
+                title="Quote"
+                aria-label="Quote"
+                aria-pressed={format.block === "quote"}
+              >
+                <svg
+                  width="11"
+                  height="11"
+                  viewBox="0 0 11 11"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.3"
+                  strokeLinecap="round"
+                  aria-hidden="true"
+                >
+                  <path d="M2.5 2.5v6M5 3.2h4M5 5.5h4M5 7.8h2.5" />
+                </svg>
+              </button>
+
+              <span className="card__format-hint" aria-hidden="true">
+                Esc to save
+              </span>
+            </div>
+          </>
         ) : (
           // Safe: renderMarkdown escapes HTML first (see src/markdown.ts; test-proven).
           <div
@@ -439,6 +668,41 @@ export default function Card({
       </div>
     </div>
   );
+}
+
+/** Live formatting state for the rail, read from the document (never guessed). */
+interface FormatState {
+  bold: boolean;
+  italic: boolean;
+  block: BlockKind;
+}
+
+/**
+ * The block element the caret currently sits inside, found by walking up from
+ * the selection anchor. Returns null when the caret is not in a known block.
+ */
+function lineAtSelection(root: HTMLElement): HTMLElement | null {
+  const sel = document.getSelection();
+  if (!sel || sel.rangeCount === 0) return null;
+  let node: Node | null = sel.getRangeAt(0).startContainer;
+  while (node && node !== root) {
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const tag = (node as HTMLElement).tagName.toLowerCase();
+      if (["p", "h1", "h2", "h3", "li"].includes(tag)) return node as HTMLElement;
+    }
+    node = node.parentNode;
+  }
+  return null;
+}
+
+/**
+ * Keep focus in the editor when a rail button is pressed. Without this the
+ * mousedown moves focus out of the contentEditable, its blur handler commits
+ * and exits edit mode, and the button's own action lands on a card that is no
+ * longer being edited.
+ */
+function keepEditorFocus(e: React.MouseEvent) {
+  e.preventDefault();
 }
 
 /** Inline-render a markdown fragment for the editor DOM (escaped first). */
