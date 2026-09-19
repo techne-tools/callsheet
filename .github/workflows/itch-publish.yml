@@ -3,9 +3,21 @@ name: Publish to itch.io
 # Fires when the draft release created by release.yml is published.
 # Flow: push tag -> release.yml builds 4 platforms -> draft release ->
 #       you publish it -> this workflow pushes the builds to itch.io.
+#
+# workflow_dispatch exists so the pusher can be re-run and verified without
+# cutting a new release. It needs a tag to push: set `tag` to an existing
+# release tag (e.g. v0.4.2). Note the `release` event checks out the TAG's
+# tree, not main, so workflow files must be present in the tag itself for a
+# release-triggered run to use the latest version of this script.
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag whose assets should be pushed (e.g. v0.4.2)'
+        required: true
+        type: string
 
 jobs:
   publish:
@@ -17,11 +29,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # The tag is only ever used to address a release, never to check out or
+      # build from, so it must not reach `ref:`. Validate the shape first and
+      # pass it to the download step through the environment (not string
+      # interpolation) so it cannot inject shell arguments either.
+      - name: Resolve and validate tag
+        id: tag
+        env:
+          REQUESTED: ${{ inputs.tag || github.event.release.tag_name }}
+        run: |
+          if ! printf '%s' "$REQUESTED" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+([-+][A-Za-z0-9.]+)?$'; then
+            echo "::error::Refusing to use unexpected tag name: $REQUESTED"
+            exit 1
+          fi
+          echo "name=$REQUESTED" >> "$GITHUB_OUTPUT"
+
       - name: Download release assets
-        run: gh release download "$TAG_NAME" --dir assets --pattern '*' --clobber
+        run: gh release download "$TAG" --dir assets --pattern '*' --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG_NAME: ${{ github.event.release.tag_name }}
+          TAG: ${{ steps.tag.outputs.name }}
 
       - name: Organize assets by platform
         run: |
