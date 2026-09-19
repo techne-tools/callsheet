@@ -47,6 +47,9 @@ jobs:
           unzip -q butler.zip -d butler-bin
           chmod +x butler-bin/butler
           echo "$(pwd)/butler-bin" >> "$GITHUB_PATH"
+          # GITHUB_PATH only takes effect from the NEXT step onward, so the
+          # current step needs the directory on its own PATH to verify butler.
+          export PATH="$(pwd)/butler-bin:$PATH"
           butler version
 
       - name: Push macOS (Apple Silicon)
