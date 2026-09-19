@@ -30,7 +30,7 @@ jobs:
         run: npm test
 
       - name: Rust toolchain
-        uses: dtolnay/rust-toolchain@1.88
+        uses: dtolnay/rust-toolchain@1.120
 
       - name: Install Linux system deps
         run: |
