@@ -13,9 +13,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Both macOS architectures build on macos-latest. The x86_64 build
+          # previously used the macos-13 (Intel) runner, which no longer gets a
+          # runner at all — every release run sat queued for 24h and was then
+          # cancelled, so Intel dmg/app.tar.gz silently stopped being produced
+          # after v0.1.0. Cross-compiling x86_64 from arm64 keeps Intel support
+          # alive without depending on a retired runner.
           - platform: macos-latest
             args: --target aarch64-apple-darwin
-          - platform: macos-13
+          - platform: macos-latest
             args: --target x86_64-apple-darwin
           - platform: ubuntu-22.04
             args: ''
