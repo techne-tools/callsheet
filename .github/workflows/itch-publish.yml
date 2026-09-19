@@ -84,25 +84,25 @@ jobs:
         run: butler push --if-changed --userversion "$USERVERSION" push/osx-arm64 prismatic7/callsheet:osx-arm64
         env:
           BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
-          USERVERSION: ${{ github.event.release.tag_name }}
+          USERVERSION: ${{ steps.tag.outputs.name }}
 
       - name: Push macOS (Intel)
         if: hashFiles('push/osx-x86_64/*') != ''
         run: butler push --if-changed --userversion "$USERVERSION" push/osx-x86_64 prismatic7/callsheet:osx-x86_64
         env:
           BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
-          USERVERSION: ${{ github.event.release.tag_name }}
+          USERVERSION: ${{ steps.tag.outputs.name }}
 
       - name: Push Linux
         if: hashFiles('push/linux/*') != ''
         run: butler push --if-changed --userversion "$USERVERSION" push/linux prismatic7/callsheet:linux
         env:
           BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
-          USERVERSION: ${{ github.event.release.tag_name }}
+          USERVERSION: ${{ steps.tag.outputs.name }}
 
       - name: Push Windows
         if: hashFiles('push/windows/*') != ''
         run: butler push --if-changed --userversion "$USERVERSION" push/windows prismatic7/callsheet:windows
         env:
           BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
-          USERVERSION: ${{ github.event.release.tag_name }}
+          USERVERSION: ${{ steps.tag.outputs.name }}
