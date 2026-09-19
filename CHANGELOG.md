@@ -4,6 +4,35 @@ All notable changes to callsheet are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] — 2026-09-20
+
+### Fixed
+
+- Card editor dropped inline formatting — the serializer only understood
+  `<strong>`/`<em>`, but the browser's own bold and italic commands produce
+  `<b>`/`<i>`. Pressing Cmd+B wrote the text back as plain on the next
+  keystroke, so formatting appeared not to stick.
+- Card editor rebuilt a line's DOM on every keystroke, discarding the caret,
+  the native undo stack and any in-flight IME composition. A line is now
+  rewritten only when its rendered form actually changes.
+- Double-clicking a word to select it inside the editor exited edit mode.
+- Converting a line to a heading slid the caret by the prefix length.
+
+### Added
+
+- Format rail on the card while editing — bold, italic, H1–H3, bullet list and
+  quote. Buttons reflect real document state and toggle off again; pressing an
+  active block button returns the line to a paragraph.
+- Larger editing surface (5.5em, capped at 46vh) with a single editing ring on
+  the card rather than one on the editor as well.
+
+### Changed
+
+- Secondary text on coloured cards (type labels, rail controls) is now ink at
+  reduced opacity instead of a neutral grey. Grey on a pastel fill measured
+  2.8–4.4:1, under the 4.5:1 floor; the on-hue treatment clears it on all five
+  seed fills.
+
 ## [0.4.1] — 2026-08-23
 
 ### Fixed
