@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-10-04
+
 ### Added
 
 - Card links are now clickable in read mode (display-only; nothing changes on
@@ -173,5 +175,6 @@ research, making, teaching, body, and admin — presence, not pressure.
 - Local-first SQLite persistence — no accounts, no sync, no cloud
 - Custom activity types with auto-assigned unique colours
 
+[0.5.0]: https://github.com/techne-tools/callsheet/releases/tag/v0.5.0
 [0.4.2]: https://github.com/techne-tools/callsheet/releases/tag/v0.4.2
 

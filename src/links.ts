@@ -9,8 +9,8 @@
 // activation decision lives here rather than in the renderer.
 //
 // Display-only. Nothing here changes what is persisted — the editor serialiser
-// (src/editor.ts) already round-trips both anchor shapes losslessly, so
-// activation is a pure read of the rendered DOM.
+// (src/editor.ts) already round-trips both anchor shapes losslessly, so a click
+// is a pure read of the rendered DOM.
 
 /**
  * The vault [[wikilinks]] open in. A readable name rather than the opaque vault
