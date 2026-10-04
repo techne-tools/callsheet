@@ -8,15 +8,20 @@
 
 import { parseInline } from "./markdown";
 
-/** Serialize a node's inline content back to markdown (strong/em markers). */
+/** Serialize a node's inline content back to markdown. */
 export function serializeInline(node: Node): string {
   if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? "";
   if (node.nodeType !== Node.ELEMENT_NODE) return "";
   const el = node as HTMLElement;
   const tag = el.tagName.toLowerCase();
-  const marker = inlineMarker(tag);
-  if (marker) return `${marker}${serializeChildren(el)}${marker}`;
   if (tag === "br") return "\n";
+  const wrap = wrapMarkers(el);
+  if (wrap) return `${wrap.open}${serializeChildren(el)}${wrap.close}`;
+  if (tag === "a") return serializeLink(el);
+  if (tag === "img") {
+    return `![${el.getAttribute("alt") ?? ""}](${el.getAttribute("src") ?? ""})`;
+  }
+  // Element with no markdown meaning of its own: keep its content.
   return serializeChildren(el);
 }
 
@@ -27,24 +32,109 @@ function serializeChildren(el: HTMLElement): string {
 }
 
 /**
- * The markdown marker an inline emphasis element contributes, or null when the
- * element carries no markdown meaning. `<b>`/`<i>` are included because that is
- * what the browser's own bold/italic commands produce in a contentEditable —
- * without them, Cmd+B round-trips through the serializer as plain text and the
- * formatting is silently dropped.
+ * The symmetric markdown wrapper an inline element contributes, or null when the
+ * element carries no wrapper. `<b>`/`<i>` are included because that is what the
+ * browser's own bold/italic commands produce in a contentEditable — without
+ * them, Cmd+B round-trips through the serializer as plain text and the
+ * formatting is silently dropped. The added kinds (`mark`, `del`, `code`) mirror
+ * the grammar the shared parser renders, so a round trip through the editor is
+ * faithful for every inline construct the card can now contain.
  */
-function inlineMarker(tag: string): string | null {
-  if (tag === "strong" || tag === "b") return "**";
-  if (tag === "em" || tag === "i") return "*";
-  return null;
+function wrapMarkers(el: HTMLElement): { open: string; close: string } | null {
+  switch (el.tagName.toLowerCase()) {
+    case "strong":
+    case "b":
+      return { open: "**", close: "**" };
+    case "em":
+    case "i":
+      return { open: "*", close: "*" };
+    case "mark":
+      return { open: "==", close: "==" };
+    case "del":
+    case "s":
+    case "strike":
+      return { open: "~~", close: "~~" };
+    case "code":
+      return { open: "`", close: "`" };
+    default:
+      return null;
+  }
 }
 
-/** The markdown line a block element represents (prefix + inline content). */
+/**
+ * The markdown open/close that surrounds an element's children, for caret
+ * arithmetic. Symmetric wrappers come from `wrapMarkers`; an anchor or an image
+ * contributes its asymmetric affixes (`[`…`](href)`, `!`…`](src)`) so a caret
+ * after a link does not drift by the wrapper's length. A refused or inert link
+ * (rendered as `href="#"`) contributes none, matching what `serializeLink`
+ * emits for it.
+ */
+function inlineAffixes(el: HTMLElement): { open: string; close: string } | null {
+  const wrap = wrapMarkers(el);
+  if (wrap) return wrap;
+  const tag = el.tagName.toLowerCase();
+  if (tag === "img") {
+    return {
+      open: `![${el.getAttribute("alt") ?? ""}](${el.getAttribute("src") ?? ""})`,
+      close: "",
+    };
+  }
+  if (tag !== "a") return null;
+  const dataHref = el.getAttribute("data-href");
+  if (dataHref !== null) {
+    // Obsidian internal link (the [[wikilink]] extension renders this shape).
+    const label = serializeChildren(el);
+    return label === dataHref
+      ? { open: "[[", close: "]]" }
+      : { open: `[[${dataHref}|`, close: "]]" };
+  }
+  const href = el.getAttribute("href") ?? "";
+  if (href === "#" || href === "") return { open: "", close: "" };
+  return { open: "[", close: `](${href})` };
+}
+
+/** Serialize an anchor back to markdown (external link or Obsidian wikilink). */
+function serializeLink(el: HTMLElement): string {
+  const text = serializeChildren(el);
+  const dataHref = el.getAttribute("data-href");
+  if (dataHref !== null) {
+    return text === dataHref ? `[[${dataHref}]]` : `[[${dataHref}|${text}]]`;
+  }
+  const href = el.getAttribute("href") ?? "";
+  // A display-only or refused link renders as href="#"; keep its text rather
+  // than writing a literal empty/`#` href back to the card.
+  if (href === "#" || href === "") return text;
+  return `[${text}](${href})`;
+}
+
+/** The Obsidian callout this line belongs to, if the line sits in one. */
+function calloutOf(el: HTMLElement): HTMLElement | null {
+  const parent = el.parentElement;
+  return parent?.classList.contains("callout") ? parent : null;
+}
+
+/**
+ * The markdown line a block element represents (prefix + inline content). A line
+ * inside an Obsidian callout carries `> ` like any other blockquote line — the
+ * callout header itself is emitted once by `htmlToMarkdown`, so the body
+ * round-trips as an ordinary callout quote.
+ */
 export function lineMarkdown(line: HTMLElement): string {
   const tag = line.tagName.toLowerCase();
-  const parent = line.parentElement;
-  if (tag === "li") return `- ${serializeInline(line)}`;
-  if (tag === "p" && parent?.tagName.toLowerCase() === "blockquote") {
+  if (tag === "li") {
+    // An ordered item carries its number, not a dash, so the caret math that
+    // measures this line's prefix stays right when the item is edited.
+    const parent = line.parentElement;
+    if (parent?.tagName.toLowerCase() === "ol") {
+      const n = Array.from(parent.children).indexOf(line) + 1;
+      return `${n}. ${serializeInline(line)}`;
+    }
+    return `- ${serializeInline(line)}`;
+  }
+  if (
+    tag === "p" &&
+    (line.parentElement?.tagName.toLowerCase() === "blockquote" || calloutOf(line))
+  ) {
     return `> ${serializeInline(line)}`;
   }
   if (tag === "h1") return `# ${serializeInline(line)}`;
@@ -53,35 +143,121 @@ export function lineMarkdown(line: HTMLElement): string {
   return serializeInline(line);
 }
 
-/** Serialize the whole editor root to markdown. */
-export function htmlToMarkdown(root: HTMLElement): string {
-  const lines: string[] = [];
-  for (const child of Array.from(root.childNodes)) {
-    if (child.nodeType === Node.TEXT_NODE) {
-      // Defensive: contentEditable can leave bare text under the root
-      // (e.g. if a block was removed). Never drop typed content.
-      const text = (child.textContent ?? "").trim();
-      if (text !== "") lines.push(text);
-      continue;
-    }
-    if (child.nodeType !== Node.ELEMENT_NODE) continue;
-    const el = child as HTMLElement;
-    const tag = el.tagName.toLowerCase();
-    if (tag === "ul") {
-      for (const li of Array.from(el.children)) {
-        lines.push(`- ${serializeInline(li)}`);
-      }
-    } else if (tag === "blockquote") {
-      for (const p of Array.from(el.children)) {
-        lines.push(`> ${serializeInline(p)}`);
-      }
-    } else if (tag === "h1" || tag === "h2" || tag === "h3") {
-      lines.push(`${"#".repeat(Number(tag[1]))} ${serializeInline(el)}`);
-    } else if (tag === "p") {
-      lines.push(serializeInline(el));
-    }
+/**
+ * A line's inline content, with its block prefix stripped — the markdown a caret
+ * offset within the line is measured against, and what splitting/merging a line
+ * operates on. Kept in one place so the Enter/Backspace/paste paths and the live
+ * re-render agree on where the content starts.
+ */
+export function lineContentMarkdown(line: HTMLElement): string {
+  const md = lineMarkdown(line);
+  const tag = line.tagName.toLowerCase();
+  if (tag === "li") return md.replace(/^(\d+\.|-)\s+/, "");
+  if (
+    tag === "p" &&
+    (line.parentElement?.tagName.toLowerCase() === "blockquote" || calloutOf(line))
+  ) {
+    return md.replace(/^>\s?/, "");
   }
-  return lines.join("\n").replace(/\n+$/, "");
+  if (tag === "h1" || tag === "h2" || tag === "h3") {
+    return md.slice(Number(tag[1]) + 1);
+  }
+  return md;
+}
+
+/** The `[!type] Title` header a callout element represents. */
+function calloutHeader(el: HTMLElement): string {
+  const type = el.getAttribute("data-callout") || "note";
+  const titleEl = el.querySelector(":scope > .callout-title") as HTMLElement | null;
+  const title = (titleEl?.textContent ?? "").trim();
+  const bare = type.charAt(0).toUpperCase() + type.slice(1);
+  return title && title !== bare ? `[!${type}] ${title}` : `[!${type}]`;
+}
+
+/**
+ * Serialize the whole editor root to markdown.
+ *
+ * Top-level blocks are separated by a blank line. A single "\n" is not enough:
+ * marked treats a bare newline as a lazy continuation, so a block that follows a
+ * list or blockquote is absorbed into it (`- x` then `> q` nests the quote inside
+ * the item; two adjacent paragraphs merge into one). Cards are edited and
+ * re-serialised on every save, so a lossy join would silently restructure the
+ * card each time it was touched. Empty blocks (a seeded `<p><br></p>`) are
+ * dropped rather than emitted as blank lines.
+ */
+export function htmlToMarkdown(root: HTMLElement): string {
+  const blocks: string[] = [];
+  for (const child of Array.from(root.childNodes)) {
+    const block = blockMarkdown(child);
+    if (block.trim() !== "") blocks.push(block);
+  }
+  return blocks.join("\n\n");
+}
+
+/** The markdown of one top-level block (possibly multi-line). */
+function blockMarkdown(node: Node): string {
+  if (node.nodeType === Node.TEXT_NODE) {
+    // Defensive: contentEditable can leave bare text under the root (e.g. if a
+    // block was removed). Never drop typed content.
+    return (node.textContent ?? "").trim();
+  }
+  if (node.nodeType !== Node.ELEMENT_NODE) return "";
+  const el = node as HTMLElement;
+  const tag = el.tagName.toLowerCase();
+  if (tag === "ul" || tag === "ol") {
+    const ordered = tag === "ol";
+    let n = 1;
+    return Array.from(el.children)
+      .map((li) => `${ordered ? `${n++}.` : "-"} ${serializeInline(li)}`)
+      .join("\n");
+  }
+  if (tag === "blockquote") {
+    return Array.from(el.children)
+      .map((p) => `> ${serializeInline(p)}`)
+      .join("\n");
+  }
+  if (el.classList.contains("callout")) {
+    // Obsidian callout: header + body, the body re-quoted. The callout element
+    // has no markdown-inline form, so this is its lossless round trip.
+    const body = el.querySelector(":scope > .callout-content") as HTMLElement | null;
+    const out = [`> ${calloutHeader(el)}`];
+    if (body) {
+      for (const p of Array.from(body.children)) {
+        out.push(`> ${serializeInline(p as HTMLElement)}`);
+      }
+    }
+    return out.join("\n");
+  }
+  if (tag === "h1" || tag === "h2" || tag === "h3") {
+    return `${"#".repeat(Number(tag[1]))} ${serializeInline(el)}`;
+  }
+  if (tag === "p") return serializeInline(el);
+  if (tag === "hr") return "---";
+  if (tag === "pre") {
+    const code = el.querySelector("code");
+    return "```\n" + (code?.textContent ?? "") + "\n```";
+  }
+  if (tag === "table") return serializeTable(el as HTMLTableElement);
+  // Any other block (a loose image, a stray div): keep its text rather than
+  // dropping content the way a tag-only switch would.
+  return (el.textContent ?? "").trim();
+}
+
+/** Serialize a rendered GFM table back to markdown. */
+function serializeTable(table: HTMLTableElement): string {
+  const cell = (c: Element | undefined) =>
+    (c?.textContent ?? "").trim().replace(/\|/g, "\\|");
+  const row = (r: Element) =>
+    "| " + Array.from(r.children).map(cell).join(" | ") + " |";
+  const head = table.querySelector("thead tr");
+  const bodyRows = Array.from(table.querySelectorAll("tbody tr"));
+  const headCells = head?.children.length ?? bodyRows[0]?.children.length ?? 0;
+  if (headCells === 0) return "";
+  const out: string[] = [];
+  out.push(head ? row(head) : "| " + Array(headCells).fill(" ").join(" | ") + " |");
+  out.push("| " + Array(headCells).fill("---").join(" | ") + " |");
+  for (const r of bodyRows) out.push(row(r));
+  return out.join("\n");
 }
 
 /**
@@ -101,10 +277,14 @@ export function htmlToMarkdown(root: HTMLElement): string {
 export function canonicalInlineHtml(html: string): string {
   const scratch = document.createElement("div");
   scratch.innerHTML = html;
-  for (const el of Array.from(scratch.querySelectorAll("b, i"))) {
-    const replacement = document.createElement(
-      el.tagName.toLowerCase() === "b" ? "strong" : "em",
-    );
+  const aliases: Record<string, string> = {
+    b: "strong",
+    i: "em",
+    s: "del",
+    strike: "del",
+  };
+  for (const el of Array.from(scratch.querySelectorAll("b, i, s, strike"))) {
+    const replacement = document.createElement(aliases[el.tagName.toLowerCase()]);
     while (el.firstChild) replacement.appendChild(el.firstChild);
     el.replaceWith(replacement);
   }
@@ -150,15 +330,16 @@ export function caretOffsetInLine(line: HTMLElement, sel: Selection): number {
     }
     if (node.nodeType !== Node.ELEMENT_NODE) return;
     const el = node as HTMLElement;
-    const tag = el.tagName.toLowerCase();
 
-    const marker = inlineMarker(tag);
-    if (marker) {
+    const affixes = inlineAffixes(el);
+    if (affixes) {
+      const openLen = affixes.open.length;
+      const closeLen = affixes.close.length;
       const inner = serializeChildren(el);
       if (el === range.startContainer) {
         // caret at a child boundary of this element
         const children = Array.from(el.childNodes);
-        let childAcc = acc + marker.length;
+        let childAcc = acc + openLen;
         for (let i = 0; i < children.length; i++) {
           if (i === range.startOffset) {
             found = childAcc;
@@ -170,12 +351,12 @@ export function caretOffsetInLine(line: HTMLElement, sel: Selection): number {
         return;
       }
       if (el.contains(range.startContainer)) {
-        acc += marker.length;
+        acc += openLen;
         for (const child of Array.from(el.childNodes)) walk(child);
         if (found < 0) found = acc;
         return;
       }
-      acc += marker.length + inner.length + marker.length;
+      acc += openLen + inner.length + closeLen;
       return;
     }
 
@@ -231,28 +412,29 @@ export function setCaretAtMarkdownOffset(line: HTMLElement, offset: number): voi
     }
     if (node.nodeType !== Node.ELEMENT_NODE) return;
     const el = node as HTMLElement;
-    const tag = el.tagName.toLowerCase();
 
-    const marker = inlineMarker(tag);
-    if (marker) {
+    const affixes = inlineAffixes(el);
+    if (affixes) {
+      const openLen = affixes.open.length;
+      const closeLen = affixes.close.length;
       const inner = serializeChildren(el);
-      if (remaining < marker.length) {
+      if (remaining < openLen) {
         place(el, 0);
         return;
       }
-      remaining -= marker.length;
+      remaining -= openLen;
       if (remaining < inner.length) {
         for (const child of Array.from(el.childNodes)) walk(child);
         if (!placed) place(el, el.childNodes.length);
         return;
       }
       remaining -= inner.length;
-      if (remaining < marker.length) {
+      if (remaining < closeLen) {
         // End of content / inside the closing marker — clamp to content end.
         place(el, el.childNodes.length);
         return;
       }
-      remaining -= marker.length;
+      remaining -= closeLen;
       // Past the whole element — continue to the next sibling.
       return;
     }
@@ -294,7 +476,7 @@ export function applyLineTransform(
   if (tag !== "p") return null;
   if (line.parentElement?.tagName.toLowerCase() === "blockquote") return null;
 
-  const m = /^(#{1,3}|>|-|\*|\+)\s+(.*)$/.exec(md);
+  const m = /^(#{1,3}|>|-|\*|\+|\d+\.)\s+(.*)$/.exec(md);
   if (!m) return null;
 
   const marker = m[1];
@@ -329,6 +511,18 @@ export function applyLineTransform(
     bq.appendChild(p);
     line.replaceWith(bq);
     return { line: p, caretOffset: contentCaret };
+  }
+  // Ordered list ("1. "). A digit-led marker only counts if it looks like a list
+  // marker (1–3 digits); a longer number ("2026.") is prose and is left alone
+  // rather than silently rewritten into a list.
+  if (/^\d+\.$/.test(marker)) {
+    if (!/^\d{1,3}\.$/.test(marker)) return null;
+    const ol = doc.createElement("ol");
+    const li = doc.createElement("li");
+    li.innerHTML = content;
+    ol.appendChild(li);
+    line.replaceWith(ol);
+    return { line: li, caretOffset: contentCaret };
   }
   // list
   const ul = doc.createElement("ul");

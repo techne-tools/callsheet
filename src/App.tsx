@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import type { ActivityType, Card, Template } from "./tauri";
 import {
   listCards,
@@ -59,6 +60,9 @@ function calmError(e: unknown, context: string): { message: string; sticky: bool
       };
     case "load":
       return { message: "Couldn't load this day. Try again.", sticky };
+    case "link":
+      // Transient: the link gesture is repeatable, so the note auto-clears.
+      return { message: "Couldn't open that link. Try again.", sticky };
     default:
       return { message: "Something went wrong. Try again.", sticky };
   }
@@ -419,6 +423,22 @@ export default function App() {
       setActivityTypes((prev) => [...prev, t]);
     } catch (e) {
       setError(calmError(e, "save"));
+    }
+  }, []);
+
+  // --- Links ---------------------------------------------------------------
+
+  /**
+   * Hand a card-body link to the OS: [[wikilinks]] and explicit obsidian://
+   * go to Obsidian, http(s)/mailto to the browser or mail client. Routed
+   * through the opener plugin (not a webview navigation) so the board itself
+   * never leaves the app.
+   */
+  const handleOpenLink = useCallback(async (url: string) => {
+    try {
+      await openUrl(url);
+    } catch (e) {
+      setError(calmError(e, "link"));
     }
   }, []);
 
@@ -917,6 +937,7 @@ export default function App() {
                       onDelete={() => void handleDelete(card)}
                       onGrabStart={(e) => beginDrag("card", card.id, e)}
                       onTypeChange={(typeId) => void changeCardType(card, typeId)}
+                      onOpenLink={(url) => void handleOpenLink(url)}
                     />
                   </div>
                 ))}

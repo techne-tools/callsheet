@@ -4,6 +4,36 @@ All notable changes to callsheet are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Card links are now clickable in read mode (display-only; nothing changes on
+  disk). `[[wikilinks]]` open the note in Obsidian
+  (`obsidian://open?vault=black-wish&file=…`), and `http(s)`/`mailto` links open
+  in the browser or mail client. Opening is routed through the OS via
+  `tauri-plugin-opener` rather than a webview navigation, so the board never
+  leaves the app. The vault name is a constant (`src/links.ts`). An explicit
+  `[label](obsidian://…)` is also live — the renderer's scheme guard admits
+  `obsidian:` (a deliberate callsheet-only widening of the guard shared with
+  eidolon) so the form Obsidian copies for a note, and `#heading` / `^block`
+  anchors, work.
+
+### Changed
+
+- Card markdown now renders through the same parser as eidolon's mirror:
+  `marked` + GFM with an escape-first `html` renderer, a scheme-guarded `link`
+  renderer, and the Obsidian callout / `[[wikilink]]` / `==highlight==`
+  extensions. The card grammar gains tables, ordered lists, strikethrough,
+  inline code, links, horizontal rules and callouts alongside the existing
+  headings, emphasis, bullets and blockquotes. Raw HTML in a card still cannot
+  be injected.
+- Card serialization (`htmlToMarkdown`) understands the wider grammar
+  (`mark`/`del`/`code`/`a`/`img`, ordered lists, tables, rules, callouts) so a
+  card edited on the board round-trips without losing content, and separates
+  top-level blocks with a blank line so a block after a list or blockquote is
+  not absorbed into it.
+
 ## [0.4.2] — 2026-09-20
 
 ### Fixed

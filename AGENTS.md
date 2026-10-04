@@ -1,6 +1,6 @@
 # Callsheet — Agent Guide
 
-Callsheet is a calm, minimal Tauri v2 desktop day-board app. It shows a pane of colour-coded cards for today (research, making, teaching, body, admin), with basic markdown in cards, drag-and-drop reordering, and day navigation. No reminders, no time-blocking, no analytics. The agentic layer (Hermes/Noema) reads the same SQLite store to propose activity types.
+Callsheet is a calm, minimal Tauri v2 desktop day-board app. It shows a pane of colour-coded cards for today (research, making, teaching, body, admin), with markdown in cards (the same renderer that drives eidolon's mirror), drag-and-drop reordering, and day navigation. No reminders, no time-blocking, no analytics. The agentic layer (Hermes/Noema) reads the same SQLite store to propose activity types.
 
 ## Tech Stack
 
@@ -50,3 +50,10 @@ cd src-tauri && cargo test   # Rust tests
 - `.impeccable/` — design system artifacts
 
 Read these before making claims about the design. Design truth is committed before build.
+
+
+## Fleet conventions
+
+Stricter-than (never looser than) fleet-wide conventions apply everywhere in the fleet:
+
+@../fleet-conventions.md

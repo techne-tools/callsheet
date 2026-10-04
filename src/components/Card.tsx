@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ActivityType, Card as CardType } from "../tauri";
 import { deriveDarkFill } from "../tauri";
 import { parseInline, renderMarkdown } from "../markdown";
+import { linkUrlFromEventTarget } from "../links";
 import {
   applyLineTransform,
   blockKindOf,
@@ -11,6 +12,7 @@ import {
   exitList,
   exitQuote,
   htmlToMarkdown,
+  lineContentMarkdown,
   lineMarkdown,
   setCaretAtMarkdownOffset,
 } from "../editor";
@@ -30,6 +32,8 @@ interface CardProps {
   onDelete: () => void;
   onGrabStart: (e: React.MouseEvent) => void;
   onTypeChange: (typeId: number) => void;
+  /** Open an activated card-body link ([[wikilink]] → Obsidian, external → browser). */
+  onOpenLink: (url: string) => void;
 }
 
 export default function Card({
@@ -46,6 +50,7 @@ export default function Card({
   onDelete,
   onGrabStart,
   onTypeChange,
+  onOpenLink,
 }: CardProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const committedRef = useRef(false);
@@ -170,12 +175,11 @@ export default function Card({
     const tag = line.tagName.toLowerCase();
     let html: string;
     if (tag === "li") {
-      html = md.startsWith("- ") ? parseInlineSafe(md.slice(2)) : "<br>";
+      html = md.startsWith("- ") || /^\d+\.\s/.test(md) ? parseInlineSafe(lineContentMarkdown(line)) : "<br>";
     } else if (tag === "h1" || tag === "h2" || tag === "h3") {
-      const n = Number(tag[1]);
-      html = parseInlineSafe(md.slice(n + 1));
-    } else if (tag === "p" && line.parentElement?.tagName.toLowerCase() === "blockquote") {
-      html = parseInlineSafe(md.startsWith("> ") ? md.slice(2) : md);
+      html = parseInlineSafe(lineContentMarkdown(line));
+    } else if (tag === "p" && (line.parentElement?.tagName.toLowerCase() === "blockquote" || line.parentElement?.classList.contains("callout"))) {
+      html = parseInlineSafe(lineContentMarkdown(line));
     } else {
       html = parseInlineSafe(md);
     }
@@ -259,9 +263,8 @@ export default function Card({
       const line = currentLine();
       if (!line) return;
       const tag = line.tagName.toLowerCase();
-      const md = lineMarkdown(line);
       const caret = caretOffsetInLine(line, sel);
-      const content = tag === "li" ? md.slice(2) : tag === "p" && line.parentElement?.tagName.toLowerCase() === "blockquote" ? md.slice(2) : tag === "h1" || tag === "h2" || tag === "h3" ? md.slice(Number(tag[1]) + 1) : md;
+      const content = lineContentMarkdown(line);
 
       // Empty line inside a list/quote exits the block.
       if (content.trim() === "") {
@@ -315,9 +318,8 @@ export default function Card({
       const line = currentLine();
       if (!line) return;
       const caret = caretOffsetInLine(line, sel);
-      const md = lineMarkdown(line);
       const tag = line.tagName.toLowerCase();
-      const content = tag === "li" ? md.slice(2) : tag === "p" && line.parentElement?.tagName.toLowerCase() === "blockquote" ? md.slice(2) : tag === "h1" || tag === "h2" || tag === "h3" ? md.slice(Number(tag[1]) + 1) : md;
+      const content = lineContentMarkdown(line);
 
       // Backspace at the very start of a block: demote it to a paragraph.
       if (caret === 0 && content.trim() === "") {
@@ -354,9 +356,9 @@ export default function Card({
           // literally into the merged content.
           const prevTag = prev.tagName.toLowerCase();
           let prevContent = prevMd;
-          if (prevTag === "li") prevContent = prevMd.replace(/^-\s+/, "");
+          if (prevTag === "li") prevContent = prevMd.replace(/^(\d+\.|-)\s+/, "");
           else if (prevTag === "h1" || prevTag === "h2" || prevTag === "h3") prevContent = prevMd.slice(Number(prevTag[1]) + 1);
-          else if (prevTag === "p" && prev.parentElement?.tagName.toLowerCase() === "blockquote") prevContent = prevMd.replace(/^>\s?/, "");
+          else if (prevTag === "p" && (prev.parentElement?.tagName.toLowerCase() === "blockquote" || prev.parentElement?.classList.contains("callout"))) prevContent = prevMd.replace(/^>\s?/, "");
           merged.innerHTML = parseInlineSafe(prevContent + content);
           line.replaceWith(merged);
           setCaretAtMarkdownOffset(merged, prevContent.length);
@@ -374,9 +376,8 @@ export default function Card({
     const line = currentLine();
     if (!line) return;
     const caret = caretOffsetInLine(line, sel);
-    const md = lineMarkdown(line);
     const tag = line.tagName.toLowerCase();
-    const content = tag === "li" ? md.slice(2) : tag === "p" && line.parentElement?.tagName.toLowerCase() === "blockquote" ? md.slice(2) : tag === "h1" || tag === "h2" || tag === "h3" ? md.slice(Number(tag[1]) + 1) : md;
+    const content = lineContentMarkdown(line);
     const before = content.slice(0, caret);
     const after = content.slice(caret);
     const lines = text.split(/\r?\n/);
@@ -590,6 +591,17 @@ export default function Card({
           // Safe: renderMarkdown escapes HTML first (see src/markdown.ts; test-proven).
           <div
             dangerouslySetInnerHTML={{ __html: renderMarkdown(card.markdown) }}
+            // Links act as links in read mode. The handler is scoped to the
+            // body and only a real link consumes the click (preventDefault +
+            // stopPropagation); a click on bare text still selects the card.
+            onClick={(e) => {
+              const url = linkUrlFromEventTarget(e.target);
+              if (url) {
+                e.preventDefault();
+                e.stopPropagation();
+                onOpenLink(url);
+              }
+            }}
           />
         )}
       </div>

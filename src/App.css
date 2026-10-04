@@ -29,6 +29,8 @@
   --blockquote-border: hsl(0, 0%, 70%);
   --hover-border: hsl(0, 0%, 75%);
   --rail-hover: hsl(0, 0%, 94%);
+  /* ==highlight== wash — calm, on-hue, not a highlighter shout */
+  --highlight-bg: hsl(48, 85%, 82%);
 
   /* Destructive register — the quiet red shared by every delete affordance
      (card, ghost, template, sticky error). Tokenised so the dark theme can
@@ -99,6 +101,8 @@ html[data-theme="dark"] {
   --blockquote-border: hsl(0, 0%, 34%);
   --hover-border: hsl(0, 0%, 34%);
   --rail-hover: hsl(0, 0%, 16%);
+  /* Highlight wash, dimmed so it reads as a tint rather than a light box */
+  --highlight-bg: hsla(48, 80%, 60%, 0.28);
 
   /* Destructive register — lifted for contrast on the dark ground */
   --danger: hsl(0, 65%, 66%);
@@ -725,11 +729,6 @@ body {
 .card__body p {
   margin: 0 0 0.5em;
 }
-.card__body p:last-child,
-.card__body ul:last-child,
-.card__body blockquote:last-child {
-  margin-bottom: 0;
-}
 .card__body ul {
   margin: 0 0 0.5em;
   padding-left: 1.2em;
@@ -742,6 +741,95 @@ body {
   padding-left: 0.75em;
   border-left: 2px solid var(--blockquote-border);
   color: var(--ink-secondary);
+}
+/* Ordered lists share the unordered list's rhythm; the browser supplies 1. 2. 3. */
+.card__body ol {
+  margin: 0 0 0.5em;
+  padding-left: 1.4em;
+}
+/* Horizontal rule — a hairline, quiet. */
+.card__body hr {
+  border: none;
+  border-top: 1px solid var(--hairline);
+  margin: 0.6em 0;
+}
+/* Inline code — a faint mono chip, distinct without being loud. */
+.card__body code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  background: var(--hairline);
+  border-radius: 3px;
+  padding: 0.05em 0.3em;
+}
+.card__body pre {
+  margin: 0 0 0.5em;
+  padding: 0.5em 0.7em;
+  background: var(--hairline);
+  border-radius: 6px;
+  overflow-x: auto;
+}
+.card__body pre code {
+  background: none;
+  padding: 0;
+}
+/* ==highlight== — an on-hue wash, not a highlighter. */
+.card__body mark {
+  background: var(--highlight-bg);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 0.1em;
+}
+/* GFM table — a quiet grid, sized to the receding type. */
+.card__body table {
+  border-collapse: collapse;
+  margin: 0 0 0.5em;
+  font-size: 0.95em;
+}
+.card__body th,
+.card__body td {
+  border: 1px solid var(--hairline);
+  padding: 0.25em 0.5em;
+  text-align: left;
+}
+.card__body th {
+  font-weight: 600;
+}
+/* Links — inline affordances. Internal ([[wikilink]]) vs external share a hue. */
+.card__body a {
+  color: var(--accent-caret);
+  text-decoration: none;
+  border-bottom: 1px solid var(--accent-focus-soft);
+  cursor: pointer;
+}
+.card__body a:hover {
+  border-bottom-color: var(--accent-caret);
+}
+/* Obsidian callout — a tinted block with a quiet left rule and a small title.
+   The five Obsidian accents all share the one calm wash; the title carries the
+   type, so colour is grammar, not decoration. */
+.card__body .callout {
+  margin: 0 0 0.5em;
+  padding: 0.4em 0.7em;
+  border-left: 2px solid var(--blockquote-border);
+  background: var(--hairline);
+  border-radius: 0 6px 6px 0;
+}
+.card__body .callout-title {
+  font-weight: 600;
+  font-size: 0.95em;
+  margin-bottom: 0.15em;
+}
+.card__body .callout-content > :last-child {
+  margin-bottom: 0;
+}
+.card__body p:last-child,
+.card__body ul:last-child,
+.card__body ol:last-child,
+.card__body blockquote:last-child,
+.card__body table:last-child,
+.card__body pre:last-child,
+.card__body .callout:last-child {
+  margin-bottom: 0;
 }
 
 /* Inline editor (contentEditable) — the rendered markdown IS the edit

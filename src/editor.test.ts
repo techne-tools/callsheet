@@ -6,6 +6,7 @@ import {
   exitList,
   exitQuote,
   htmlToMarkdown,
+  lineContentMarkdown,
   lineMarkdown,
   serializeInline,
   setCaretAtMarkdownOffset,
@@ -54,19 +55,42 @@ describe("lineMarkdown", () => {
   });
 });
 
+describe("lineContentMarkdown", () => {
+  it("strips a paragraph to its content", () => {
+    expect(lineContentMarkdown(root("<p>hello</p>").firstElementChild as HTMLElement)).toBe("hello");
+  });
+
+  it("strips heading, list and quote prefixes", () => {
+    expect(lineContentMarkdown(root("<h2>Sub</h2>").firstElementChild as HTMLElement)).toBe("Sub");
+    expect(lineContentMarkdown(root("<ul><li>item</li></ul>").querySelector("li") as HTMLElement)).toBe("item");
+    expect(lineContentMarkdown(root("<ol><li>item</li></ol>").querySelector("li") as HTMLElement)).toBe("item");
+    expect(lineContentMarkdown(root("<blockquote><p>q</p></blockquote>").querySelector("p") as HTMLElement)).toBe("q");
+  });
+
+  it("strips a callout line like any other quote line", () => {
+    const callout = root(
+      '<div class="callout" data-callout="note"><div class="callout-content"><p>body</p></div></div>',
+    ).querySelector("p") as HTMLElement;
+    expect(lineContentMarkdown(callout)).toBe("body");
+  });
+});
+
 describe("htmlToMarkdown", () => {
   it("serializes a mixed document", () => {
     const el = root(
       "<h1>Title</h1><p>Some <strong>bold</strong> text</p><ul><li>one</li><li>two</li></ul><blockquote><p>quoted</p></blockquote>",
     );
     expect(htmlToMarkdown(el)).toBe(
-      "# Title\nSome **bold** text\n- one\n- two\n> quoted",
+      "# Title\n\nSome **bold** text\n\n- one\n- two\n\n> quoted",
     );
   });
 
-  it("trims trailing newlines", () => {
+  it("separates top-level blocks with a blank line", () => {
+    // A single "\n" between blocks is a markdown lazy continuation: the second
+    // paragraph would be absorbed into the first. Blocks are separated by a
+    // blank line so the round trip is faithful.
     const el = root("<p>a</p><p>b</p>");
-    expect(htmlToMarkdown(el)).toBe("a\nb");
+    expect(htmlToMarkdown(el)).toBe("a\n\nb");
   });
 
   it("serializes bare text nodes under the root (empty-card typing)", () => {
@@ -114,6 +138,22 @@ describe("applyLineTransform", () => {
     const res = applyLineTransform(p, "- item", 6);
     expect(res!.line.tagName).toBe("LI");
     expect(res!.line.parentElement!.tagName).toBe("UL");
+  });
+
+  it("turns '1. ' into an ordered list item", () => {
+    const el = root("<p>1. item</p>");
+    const p = el.firstElementChild as HTMLElement;
+    const res = applyLineTransform(p, "1. item", 7);
+    expect(res).not.toBeNull();
+    expect(res!.line.tagName).toBe("LI");
+    expect(res!.line.parentElement!.tagName).toBe("OL");
+  });
+
+  it("leaves an ordinary number-and-dot line alone", () => {
+    // "2026. was a year" is prose, not a list marker (four digits).
+    const el = root("<p>2026. was a year</p>");
+    const p = el.firstElementChild as HTMLElement;
+    expect(applyLineTransform(p, "2026. was a year", 18)).toBeNull();
   });
 
   it("returns null for plain paragraphs", () => {

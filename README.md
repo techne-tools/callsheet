@@ -2,8 +2,8 @@
 
 A calm, minimal desktop day-board for macOS. A single pane of colour-coded
 cards holds the day's plan — research, making, teaching, body, admin — with
-basic markdown, drag-and-drop reordering, and day navigation. It holds, it
-never pings.
+markdown (the same renderer that drives eidolon's mirror), drag-and-drop
+reordering, and day navigation. It holds, it never pings.
 
 Built with Tauri v2 (Rust + SQLite) and React 19 + TypeScript (strict).
 
