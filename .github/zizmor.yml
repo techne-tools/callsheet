@@ -1,0 +1,13 @@
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        "*": ref-pin
+
+  # Accepted risk: release.yml restores a Rust build cache and then publishes the
+  # runtime artifact from the same job. Nothing but a tag push runs it, so there is
+  # no untrusted writer to poison the cache; dropping the cache costs minutes per
+  # release. Revisit if a second committer or a PR-triggered build is added.
+  cache-poisoning:
+    ignore:
+      - release.yml

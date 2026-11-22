@@ -1,22 +1,27 @@
-# Dependabot auto-merge for patch + minor bumps.
+# Emitted by agent-dispatch bin/repo-bootstrap.sh.
 #
-# Differs from the unslop original in one way: `gh pr merge --auto` merges
-# IMMEDIATELY when the base branch has no required status checks, and this
-# estate protects no branches — a red build would land. `gh pr checks --watch`
-# waits for the PR's checks and exits non-zero if any fail, so the merge only
-# happens on green. With no checks at all it exits non-zero too, so we never
-# merge blind.
+# `gh pr merge --auto` merges IMMEDIATELY when the base branch has no required
+# checks — a red build would land. `gh pr checks --watch` waits for this PR's
+# checks and exits non-zero on failure, so the merge only happens on green, and
+# exits non-zero with no checks at all: never merge blind.
+#
+# Deliberately `pull_request`, not `pull_request_target`: the target trigger runs
+# with a write token in the base repo's context, and Dependabot PRs get write
+# permissions on the plain trigger anyway. Nothing here checks out code either.
 name: Dependabot Auto-Merge
 
-on: pull_request_target
+on: pull_request
 
 permissions:
   contents: write
   pull-requests: write
+  checks: read
 
 jobs:
   auto-merge:
-    if: github.actor == 'dependabot[bot]'
+    # The PR author, not github.actor: the actor is spoofable by a commit author
+    # string, the PR's user login is not.
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
       - name: Fetch Dependabot metadata
@@ -34,15 +39,5 @@ jobs:
           if gh pr checks "$PR_URL" --watch --fail-fast; then
             gh pr merge --squash --delete-branch "$PR_URL"
           else
-            gh pr comment "$PR_URL" --body \
-              "Auto-merge held: CI is not green on this head. Review before merging."
+            gh pr comment "$PR_URL" --body "Auto-merge held: CI is not green on this head. Review before merging."
           fi
-
-      - name: Comment on major updates (manual review required)
-        if: steps.metadata.outputs.update-type == 'version-update:semver-major'
-        env:
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh pr comment "$PR_URL" --body \
-            "Major version bump — auto-merge skipped. Review the changelog before merging."
